@@ -1,10 +1,10 @@
 # TAXIMAST WEB
 
-Sistema complementario para la plataforma **Taximast**. Este sistema fue diseñado para gestionar e integrar la API oficial de WhatsApp Business, reemplazando la antigua integración no oficial basaba en una API pirata que quedó descontinuada. Su propósito principal es actuar como una interfaz moderna y centralizada donde los operadores pueden administrar las comunicaciones con clientes de múltiples líneas de taxis de forma ágil y en tiempo real.
+Sistema complementario para la plataforma **Taximast**. Este sistema fue diseñado para gestionar e integrar la API oficial de WhatsApp Business, reemplazando la antigua integración no oficial basada en una API pirata que quedó descontinuada. Su propósito principal es actuar como una interfaz moderna y centralizada donde los operadores pueden administrar las comunicaciones con clientes de múltiples líneas de taxis de forma ágil y en tiempo real.
 
 ---
 
-## 🚀 Características Principales (Implicaciones)
+## 🚀 Características Principales
 
 Debido a que la API oficial de WhatsApp Business está orientada al manejo de mensajes vía APIs o webhooks (código) y no provee una interfaz de mensajería (como la app de celular clásica), **Taximast Web** provee el entorno visual e interactivo necesario:
 
@@ -12,64 +12,146 @@ Debido a que la API oficial de WhatsApp Business está orientada al manejo de me
 - 📞 **Integración de Llamadas y Notificaciones:** Canal centralizado de atención al cliente para solicitudes de unidades (carreras).
 - 🗄️ **Registro e Historial Detallado:** Almacenamiento persistente de las conversaciones, historiales de interacciones con los clientes y datos clave en la base de datos (MongoDB).
 - 🔐 **Sesiones Independientes de Operadores:** Cada operador de turno posee su propio acceso y sesión, permitiendo rastrear la carga de trabajo y quién atendió a qué cliente.
-- 🏢 **Arquitectura Multi-Línea:** Capacidad de administrar datos, operadores y clientes de **distintas líneas de taxis** dentro de un mismo sistema centralizado, aislando o agrupando la información según corresponda para mantener el orden de la empresa matriz.
+- 🏢 **Arquitectura Multi-Línea:** Capacidad de administrar datos, operadores y clientes de **distintas líneas de taxis** dentro de un mismo sistema centralizado, aislando o agrupando la información según corresponda.
 
 ---
 
 ## 🛠️ Tecnologías Utilizadas
 
-El stack tecnológico está enfocado en rendimiento, escalabilidad y una excelente experiencia de usuario:
-
-- **Frontend:** [Next.js](https://nextjs.org/) (React), estilizado con [Tailwind CSS](https://tailwindcss.com/) y componentes base de [HeroUI](https://www.heroui.com/) para una interfaz veloz, moderna y accesible.
-- **Backend / Real-time:** Arquitectura Fullstack con Next.js (Server Actions / API Routes), complementada con Servidor / Canales en Node.js usando [Socket.io](https://socket.io/) para comunicación bidireccional en tiempo real entre el servidor y los operadores.
-- **Base de Datos:** [MongoDB](https://www.mongodb.com/) gestionado a través de **Mongoose** parar crear estructuras de datos escalables (JSON).
-- **Integraciones Clave:** [WhatsApp Business API Oficial](https://developers.facebook.com/docs/whatsapp) para el envío y recepción de mensajes de manera segura y avalada por Meta.
+- **Frontend:** [Next.js](https://nextjs.org/) (React), estilizado con [Tailwind CSS](https://tailwindcss.com/) y componentes base de [HeroUI](https://www.heroui.com/).
+- **Backend / Real-time:** Arquitectura Fullstack con Next.js (API Routes), complementada con [Socket.io](https://socket.io/) para comunicación bidireccional en tiempo real *(pendiente)*.
+- **Base de Datos:** [MongoDB](https://www.mongodb.com/) gestionado a través de **Mongoose**.
+- **Autenticación:** JWT firmado con `jsonwebtoken`, almacenado en cookie HttpOnly.
+- **Integración:** [WhatsApp Business API Oficial](https://developers.facebook.com/docs/whatsapp) para envío y recepción de mensajes.
 
 ---
 
 ## 🗃️ Estructura de la Base de Datos (Modelos)
 
-El sistema hace uso de una base de datos no relacional (MongoDB) con colecciones estructuradas definidas a través de los **esquemas de Mongoose** en la carpeta `/models`. Las entidades primarias iniciales son:
+Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
 
-1. **`Lineas` (Líneas de Taxis):**
-   - Agrupa la configuración y los datos generales de cada empresa o corporación de taxis afiliada al ecosistema.
-   - Permite relacionar de dónde proviene un viaje, y a qué línea pertenece cada operador o unidad de manejo registrada en el sistema.
+| Modelo | Descripción |
+|---|---|
+| `Lineas` | Configuración de cada empresa/línea de taxis (credenciales WhatsApp, tokens de Meta) |
+| `Operadores` | Usuarios del sistema con roles (`admin`, `operador`, `admin_linea`) y estado de turno |
+| `Mensajes` | Cada mensaje individual del chat; referencia línea, operador, cliente y estado de entrega |
 
-2. **`Unidades` (Vehículos):**
-   - Almacena el inventario de los vehículos pertenecientes a cada línea u operadora (placas, marca, modelo, estado actual/disponibilidad).
-   - Estrechamente relacionadas con la línea a la que pertenecen y los actores (conductores) que las manejan para las carreras.
+> 📌 Modelos planificados pero aún no creados: `Unidades` (vehículos), `Conductores`.
 
-3. **`Conductores`:**
-   - Información del personal o choferes asociados a las unidades. 
-   - Contiene sus datos de contacto y estatus de disponibilidad para la asignación de viajes de parte de sus respectivos operadores de Base.
+---
 
-4. **`Operadores` (Usuarios del Sistema Web):**
-   - Los recepcionistas encargados de la atención al cliente constante utilizando la plataforma **Taximast Web**.
-   - Manejan sus propias credenciales de login, estado actual (Ej. "Turno abierto", "En línea", "Ocupado") y niveles de permisos o roles.
+## 🔐 Sistema de Roles
 
-5. **`Mensajes` (Chats de WhatsApp):**
-   - La colección núcleo del flujo de mensajería asincrónica o en tiempo real. 
-   - Almacena cada interacción (mensaje entrante del cliente o enviado por el operador) consumida por la API oficial de WhatsApp.
-   - Incluye referencias vitales para trazabilidad: el Cliente emisor/receptor (número, perfil web), el Operador que brindó la atención, timestamps (fecha/hora de envío y recepción) y estado del mensaje según los webhooks de Meta (enviado, entregado, leído).
+| Rol | Acceso |
+|---|---|
+| `admin` | Panel completo: todas las líneas, todos los chats, estadísticas globales, gestión de operadores y líneas |
+| `admin_linea` | Panel de su línea: chats de su línea, estadísticas de su línea, gestión de operadores de su línea |
+| `operador` | Solo chats de su línea asignada |
+
+---
+
+## 🗺️ Arquitectura de Rutas
+
+```
+/login                       → Todos los roles (público)
+/dashboard                   → Todos los roles autenticados
+/chat                        → Todos los roles (lista de chats + panel activo)
+/chat/[numero]               → Chat individual con un contacto
+
+/admin/operadores            → admin + admin_linea
+/admin/lineas                → Solo admin
+/admin/estadisticas          → Solo admin (global) / admin_linea (su línea)
+```
+
+---
+
+## ✅ Estado del Desarrollo
+
+### Completado
+
+| Módulo | Descripción |
+|---|---|
+| **Login** (`/login`) | Página de inicio de sesión con validación, manejo de errores y redirección |
+| **Auth JWT** | Generación, verificación y expiración (24h) de tokens JWT con cookie HttpOnly |
+| **Middleware de rutas** (`proxy.ts`) | Protección de rutas por autenticación y rol; redirección automática según permisos |
+| **Dashboard base** (`/dashboard`) | Vista de bienvenida con tarjetas de estadísticas (placeholders) y accesos rápidos según rol |
+| **API Auth** | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| **API WhatsApp** | `POST /api/whatsapp/send`, `POST /api/whatsapp/send-bulk`, `GET /api/whatsapp/status`, `POST /api/whatsapp/webhook`, `POST /api/whatsapp/location` |
+| **Modelos Mongoose** | `Lineas`, `Operadores`, `Mensajes` con índices optimizados |
+| **Control de acceso por rol** | 3 roles en `JWTPayload` y `proxy.ts`: `admin`, `operador`, `admin_linea` |
+
+---
+
+### 🔲 Pendiente de Desarrollo
+
+#### Vistas
+| Vista | Rol | Estado |
+|------------------------------------------------|------------------------|---------------|
+| Vista de chat (`/chat`) -----------------------| Todos -----------------| ❌ Pendiente |
+| Chat individual (`/chat/[numero]`) ------------| Todos -----------------| ❌ Pendiente |
+| Panel admin — líneas (`/admin/lineas`) --------| `admin` ---------------| ❌ Pendiente |
+| Panel admin — operadores (`/admin/operadores`) | `admin`, `admin_linea` | ❌ Pendiente |
+| Estadísticas globales (`/admin/estadisticas`) | `admin` ----------------| ❌ Pendiente |
+| Dashboard con datos reales -------------------| Todos ------------------| ❌ Pendiente |
+
+#### APIs Faltantes
+| Endpoint | Descripción |
+|---|---|
+| `GET /api/chats` | Lista de conversaciones agrupadas por contacto (con último mensaje y no leídos) |
+| `GET /api/chats/[numero]` | Historial completo de mensajes de un contacto |
+| `GET /api/admin/lineas` | Listar líneas (admin) |
+| `POST /api/admin/lineas` | Crear/editar línea |
+| `GET /api/admin/operadores` | Listar operadores (filtrado por línea si es admin_linea) |
+| `POST /api/admin/operadores` | Crear/editar operador |
+| `GET /api/admin/estadisticas` | Métricas globales o por línea |
+
+#### Infraestructura
+| Tarea | Estado |
+|---|---|
+| Servidor Socket.io para mensajes en tiempo real | ❌ Pendiente |
+| Integración del webhook de WhatsApp con Socket.io (push a clientes conectados) | ❌ Pendiente |
+| Campo `linea` opcional para rol `admin` (actualmente `required: true`) | ❌ Pendiente |
+| Modelos `Unidades` y `Conductores` | ❌ Pendiente |
+| Chatbot IA para respuesta automática de WhatsApp | ❌ Pendiente (largo plazo) |
 
 ---
 
 ## ⚙️ Desarrollo y Ejecución Local
 
-Para instalar y correr este proyecto de forma local:
-
-1. Clonar el repositorio del proyecto.
-2. Instalar las dependencias de **Node.js**:
+1. Clonar el repositorio.
+2. Instalar dependencias:
    ```bash
    npm install
    ```
-3. Configurar todas las variables de entorno (`.env`) requeridas por el sistema, tales como credenciales de **MongoDB**, y los secret tokens / keys / Phone ID provistos por el Dashboard de **Meta for Developers** (WhatsApp Business API).
-4. Iniciar el entorno de desarrollo usando el compilador rápido de Next.js (`Turbopack`):
+3. Configurar las variables de entorno (`.env`):
+
+   | Variable | Descripción |
+   |---|---|
+   | `MONGODB_URI` | URI de conexión a MongoDB |
+   | `JWT_SECRET` | Clave secreta para firma de tokens |
+   | `WA_PHONE_NUMBER_ID` | Phone Number ID de Meta for Developers |
+   | `WA_ACCESS_TOKEN` | System User Token de WhatsApp Business API |
+   | `WA_VERIFY_TOKEN` | Token de verificación para el webhook de Meta |
+
+4. Iniciar el entorno de desarrollo:
    ```bash
    npm run dev
    ```
 
-El servidor estará corriendo de manera predeterminada en `http://localhost:3000`.
+El servidor correrá en `http://localhost:3000`.
 
 ---
-📝 *Este archivo proporciona las bases arquitectónicas y los contextos iniciales del sistema. Se recomienda mantenerlo actualizado a medida que se maduren nuevos módulos funcionales o esquemas de la BD en Mongoose.*
+
+## 🎨 Paleta de Colores
+
+```css
+--onyx:        #0b0c0c   /* Fondo principal */
+--jet-black:   #2a2e34   /* Fondo de tarjetas */
+--platinum:    #e9eaec   /* Texto principal */
+--bright-gold: #fbe134   /* Acento primario */
+--saffron:     #e4b61a   /* Acento secundario */
+```
+
+---
+
+📝 *Última actualización: Febrero 2026 — Se refleja el estado real del proyecto incluyendo el sistema de autenticación, middleware de roles y APIs de WhatsApp implementadas.*

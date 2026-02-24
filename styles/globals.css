@@ -9,4 +9,11 @@
 @theme {
     --font-sans: "font", sans-serif;
     --font-mono: "monospace", monospace;
+
+    /* ── Paleta Taximast ── */
+    --color-onyx: #0b0c0c;
+    --color-jet-black: #2a2e34;
+    --color-platinum: #e9eaec;
+    --color-bright-gold: #fbe134;
+    --color-saffron: #e4b61a;
 }

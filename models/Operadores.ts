@@ -54,7 +54,7 @@ const OperadoresSchema = new mongoose.Schema<IOperador>(
         // Nivel de permisos dentro del sistema
         rol: {
             type: String,
-            enum: ["admin", "operador"],
+            enum: ["admin", "operador", "admin_linea"],
             default: "operador",
         },
         // Estado actual del operador dentro de la plataforma (para rastrear carga de trabajo)

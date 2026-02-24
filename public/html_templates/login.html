@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Taximast WhatsApp Web</title>
+    <!-- Importamos Tailwind CSS desde su CDN para uso rápido -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuramos Tailwind para incluir tu paleta de colores personalizada -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'onyx': '#0b0c0c',
+                        'jet-black': '#2a2e34',
+                        'platinum': '#e9eaec',
+                        'bright-gold': '#fbe134',
+                        'saffron': '#e4b61a',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<!-- Usamos un degradado de fondo oscuro para dar un toque moderno y elegante -->
+<body class="bg-gradient-to-br from-onyx to-jet-black min-h-screen flex items-center justify-center p-4 antialiased">
+    
+    <!-- Contenedor principal de la tarjeta de Login -->
+    <div class="bg-jet-black/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-md border border-onyx">
+        
+        <!-- Encabezado y logo/título -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-bright-gold mb-2 tracking-tight">Taximast</h1>
+            <p class="text-platinum text-sm">Plataforma de Operadores WhatsApp</p>
+        </div>
+
+        <!-- Formulario: Solo pide usuario y clave -->
+        <form id="loginForm" class="space-y-6">
+            
+            <!-- Campo: Usuario -->
+            <div>
+                <label for="username" class="block text-sm font-medium text-platinum mb-1">Usuario</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    required
+                    autocomplete="username"
+                    class="w-full px-4 py-3 rounded-lg bg-onyx/80 border border-jet-black text-platinum focus:outline-none focus:ring-2 focus:ring-bright-gold focus:border-transparent transition-all placeholder-gray-500"
+                    placeholder="Ingresa tu usuario">
+            </div>
+
+            <!-- Campo: Clave -->
+            <div>
+                <label for="password" class="block text-sm font-medium text-platinum mb-1">Clave</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    required
+                    autocomplete="current-password"
+                    class="w-full px-4 py-3 rounded-lg bg-onyx/80 border border-jet-black text-platinum focus:outline-none focus:ring-2 focus:ring-bright-gold focus:border-transparent transition-all placeholder-gray-500"
+                    placeholder="••••••••">
+            </div>
+
+            <!-- Botón de envío -->
+            <button 
+                type="submit"
+                class="w-full bg-bright-gold hover:bg-saffron text-onyx font-bold text-lg py-3 px-4 rounded-lg transition-colors duration-300 shadow-[0_0_15px_rgba(251,225,52,0.3)] hover:shadow-[0_0_25px_rgba(228,182,26,0.5)] flex justify-center items-center mt-4">
+                Iniciar Sesión
+            </button>
+        </form>
+
+        <!-- Contenedor para mostrar mensajes de error o éxito (oculto por defecto) -->
+        <div id="messageBox" class="hidden mt-6 p-4 rounded-lg text-sm text-center font-medium transition-all"></div>
+        
+    </div>
+
+    <!-- Script para simular el comportamiento del login sin recargar la página -->
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            // Evitamos que el formulario recargue la página web
+            e.preventDefault();
+            
+            const btn = this.querySelector('button');
+            const messageBox = document.getElementById('messageBox');
+            
+            // Cambiamos el estado del botón mientras "carga"
+            btn.innerHTML = 'Verificando...';
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            messageBox.classList.add('hidden');
+
+            // Simulamos el tiempo de respuesta de tu servidor (ej. validando en MongoDB)
+            setTimeout(() => {
+                // Aquí iría tu lógica real de conexión con el backend
+                messageBox.classList.remove('hidden');
+                messageBox.classList.add('bg-green-500/20', 'text-green-400', 'border', 'border-green-500/50');
+                messageBox.textContent = '¡Credenciales validadas! Redirigiendo a los chats...';
+                
+                // Restauramos el botón
+                btn.innerHTML = 'Iniciar Sesión';
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }, 1500);
+        });
+    </script>
+</body>
+</html>

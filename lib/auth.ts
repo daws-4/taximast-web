@@ -1,23 +1,103 @@
-import { NextRequest, NextResponse } from 'next/server';
+import jwt from "jsonwebtoken";
+import { NextRequest, NextResponse } from "next/server";
+
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
+if (!JWT_SECRET) {
+    throw new Error("Por favor define la variable de entorno JWT_SECRET en .env");
+}
+
+export interface JWTPayload {
+    id: string;
+    username: string;
+    nombre: string;
+    rol: "admin" | "operador" | "admin_linea";
+    linea: string;
+}
+
+/**
+ * Genera un JWT firmado con los datos del operador.
+ * Expira en 24 horas.
+ */
+export function signToken(payload: JWTPayload): string {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
+}
+
+/**
+ * Verifica y decodifica un JWT.
+ * Retorna el payload si es válido, null si está expirado o es inválido.
+ */
+export function verifyToken(token: string): JWTPayload | null {
+    try {
+        return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Extrae el token JWT de la cookie HttpOnly o del header Authorization.
+ */
+export function getTokenFromRequest(req: NextRequest): string | null {
+    // Prioridad 1: Cookie HttpOnly (flujo web normal)
+    const cookie = req.cookies.get("taximast_token")?.value;
+    if (cookie) return cookie;
+
+    // Prioridad 2: Header Authorization: Bearer <token> (para clientes API externos)
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+        return authHeader.replace("Bearer ", "");
+    }
+
+    return null;
+}
 
 type HandlerHelper = (req: NextRequest, params?: any) => Promise<NextResponse> | NextResponse;
 
+/**
+ * HOF que protege un API route verificando el JWT.
+ * Inyecta el payload del token como `req.user` (via header interno).
+ */
 export function withAuth(handler: HandlerHelper): HandlerHelper {
     return async (req: NextRequest, params?: any) => {
-        // Basic API Key Authentication
-        const authHeader = req.headers.get('authorization');
-        const apiKey = process.env.VFP_API_KEY || 'taximast-secret-key';
+        const token = getTokenFromRequest(req);
 
-        // Allow Bearer token or just the key
-        const token = authHeader?.replace('Bearer ', '');
-
-        if (!token || token !== apiKey) {
+        if (!token) {
             return NextResponse.json(
-                { success: false, error: 'Unauthorized' },
+                { success: false, error: "No autenticado" },
                 { status: 401 }
             );
         }
 
-        return handler(req, params);
+        const payload = verifyToken(token);
+
+        if (!payload) {
+            return NextResponse.json(
+                { success: false, error: "Token inválido o expirado" },
+                { status: 401 }
+            );
+        }
+
+        // Añadir el payload al header para que el handler lo pueda leer
+        const requestWithUser = new NextRequest(req, {
+            headers: {
+                ...Object.fromEntries(req.headers.entries()),
+                "x-user-payload": JSON.stringify(payload),
+            },
+        });
+
+        return handler(requestWithUser, params);
     };
+}
+
+/**
+ * Helper para leer el usuario inyectado por withAuth dentro de un handler.
+ */
+export function getUserFromRequest(req: NextRequest): JWTPayload | null {
+    try {
+        const raw = req.headers.get("x-user-payload");
+        return raw ? (JSON.parse(raw) as JWTPayload) : null;
+    } catch {
+        return null;
+    }
 }
