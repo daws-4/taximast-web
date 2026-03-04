@@ -128,7 +128,7 @@ export function LoginCard({
                         isDisabled={isLoading}
                         radius="sm"
                         size="lg"
-                        className="mt-1 font-bold text-base transition-all duration-300"
+                        className="mt-1 font-bold text-base transition-all duration-300 cursor-pointer"
                         style={{
                             backgroundColor: C.brightGold,
                             color: C.onyx,

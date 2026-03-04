@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 
 // Rutas que NO requieren autenticación
-const PUBLIC_ROUTES = ["/login", "/api/auth/login"];
+const PUBLIC_ROUTES = [
+    "/login",
+    "/api/auth/login",
+    "/api/whatsapp/webhook" // El webhook no usa JWT, usa verificación de firma HMAC
+];
 
 // Rutas exclusivas del admin global (gestión de todas las líneas)
 const ADMIN_GLOBAL_ROUTES = [
@@ -19,6 +23,17 @@ const ADMIN_SHARED_ROUTES = [
 export function proxy(req: NextRequest) {
     const { pathname } = req.nextUrl;
 
+    // Verificar token JWT desde la cookie
+    const token = req.cookies.get("taximast_token")?.value;
+
+    // Si hay token válido y el usuario intenta acceder a /login → redirigir al dashboard
+    if (token && pathname.startsWith("/login")) {
+        const payload = verifyToken(token);
+        if (payload) {
+            return NextResponse.redirect(new URL("/dashboard", req.url));
+        }
+    }
+
     // Permitir rutas públicas y assets de Next.js
     const isPublic =
         pathname === "/" ||
@@ -28,21 +43,16 @@ export function proxy(req: NextRequest) {
 
     if (isPublic) return NextResponse.next();
 
-    // Verificar token JWT desde la cookie
-    const token = req.cookies.get("taximast_token")?.value;
-
+    // Si no hay token → redirigir a la raíz
     if (!token) {
-        const loginUrl = new URL("/login", req.url);
-        loginUrl.searchParams.set("redirect", pathname);
-        return NextResponse.redirect(loginUrl);
+        return NextResponse.redirect(new URL("/", req.url));
     }
 
     const payload = verifyToken(token);
 
     if (!payload) {
-        // Token inválido o expirado → limpiar cookie y redirigir
-        const loginUrl = new URL("/login", req.url);
-        const response = NextResponse.redirect(loginUrl);
+        // Token inválido o expirado → limpiar cookie y redirigir a la raíz
+        const response = NextResponse.redirect(new URL("/", req.url));
         response.cookies.set("taximast_token", "", { maxAge: 0, path: "/" });
         return response;
     }

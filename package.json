@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "node server.mjs",
     "build": "next build",
-    "start": "next start",
+    "start": "cross-env NODE_ENV=production node server.mjs",
     "lint": "eslint --fix"
   },
   "dependencies": {
@@ -61,7 +61,9 @@
     "next": "^16.1.6",
     "next-themes": "0.4.6",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "15.5.9",
@@ -74,6 +76,7 @@
     "@types/react-dom": "18.3.0",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
+    "cross-env": "^10.1.0",
     "eslint": "^9.24.0",
     "eslint-config-next": "^16.1.6",
     "eslint-config-prettier": "9.1.0",

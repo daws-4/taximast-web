@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoginCard } from "@/components/login/LoginCard";
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -43,16 +43,24 @@ export default function LoginPage() {
     }
 
     return (
+        <LoginCard
+            username={username}
+            password={password}
+            isLoading={isLoading}
+            error={error}
+            onUsernameChange={setUsername}
+            onPasswordChange={setPassword}
+            onSubmit={handleSubmit}
+        />
+    );
+}
+
+export default function LoginPage() {
+    return (
         <main className="min-h-screen flex items-center justify-center p-4">
-            <LoginCard
-                username={username}
-                password={password}
-                isLoading={isLoading}
-                error={error}
-                onUsernameChange={setUsername}
-                onPasswordChange={setPassword}
-                onSubmit={handleSubmit}
-            />
+            <Suspense fallback={<div className="text-white opacity-50 text-sm">Cargando panel de inicio...</div>}>
+                <LoginForm />
+            </Suspense>
         </main>
     );
 }
