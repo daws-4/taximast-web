@@ -78,15 +78,11 @@ export function withAuth(handler: HandlerHelper): HandlerHelper {
             );
         }
 
-        // Añadir el payload al header para que el handler lo pueda leer
-        const requestWithUser = new NextRequest(req, {
-            headers: {
-                ...Object.fromEntries(req.headers.entries()),
-                "x-user-payload": JSON.stringify(payload),
-            },
-        });
+        // Añadir el payload directamente al request para no clonar la petición
+        // (clonar NextRequest en producción puede causar pérdida de nextUrl o body)
+        (req as any).user = payload;
 
-        return handler(requestWithUser, params);
+        return handler(req, params);
     };
 }
 
@@ -95,6 +91,12 @@ export function withAuth(handler: HandlerHelper): HandlerHelper {
  */
 export function getUserFromRequest(req: NextRequest): JWTPayload | null {
     try {
+        // Obtenemos el usuario inyectado directamente
+        if ((req as any).user) {
+            return (req as any).user as JWTPayload;
+        }
+
+        // Fallback por si acaso usamos header en un futuro
         const raw = req.headers.get("x-user-payload");
         return raw ? (JSON.parse(raw) as JWTPayload) : null;
     } catch {
