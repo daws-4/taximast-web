@@ -3,6 +3,7 @@ import { withAuth, getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import MensajesModel from "@/models/Mensajes";
 import OperadoresModel from "@/models/Operadores";
+import ChatsModel from "@/models/Chats";
 import mongoose from "mongoose";
 
 async function handler(req: NextRequest) {
@@ -23,22 +24,21 @@ async function handler(req: NextRequest) {
         const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
         const [
+            chatsActivosHoy,
             mensajesHoy,
             mensajesMes,
             operadoresEnLinea,
-            chatsActivosHoy,
         ] = await Promise.all([
+            ChatsModel.countDocuments({
+                linea: lineaId,
+                estado: { $in: ["abierto", "pendiente"] },
+            }),
             MensajesModel.countDocuments({ linea: lineaId, timestamp_whatsapp: { $gte: hoy } }),
             MensajesModel.countDocuments({ linea: lineaId, timestamp_whatsapp: { $gte: inicioMes } }),
             OperadoresModel.countDocuments({
                 linea: lineaId,
                 status: { $in: ["en_linea", "turno_abierto", "ocupado"] },
             }),
-            MensajesModel.distinct("cliente_numero", {
-                linea: lineaId,
-                direccion: "entrante",
-                timestamp_whatsapp: { $gte: hoy },
-            }).then((nums) => nums.length),
         ]);
 
         return NextResponse.json({

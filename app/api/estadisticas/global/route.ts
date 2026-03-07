@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db";
 import MensajesModel from "@/models/Mensajes";
 import OperadoresModel from "@/models/Operadores";
 import LineasModel from "@/models/Lineas";
+import ChatsModel from "@/models/Chats";
 
 async function handler(req: NextRequest) {
     try {
@@ -17,22 +18,19 @@ async function handler(req: NextRequest) {
         hoy.setHours(0, 0, 0, 0);
 
         const [
+            chatsActivosHoy,
             totalMensajesHoy,
             operadoresEnLinea,
             lineasActivas,
-            chatsActivosHoy,
         ] = await Promise.all([
+            // Contactos únicos siendo atendidos o esperando (chats abiertos/pendientes)
+            ChatsModel.countDocuments({ estado: { $in: ["abierto", "pendiente"] } }),
             // Total de mensajes enviados/recibidos hoy en todas las líneas
             MensajesModel.countDocuments({ timestamp_whatsapp: { $gte: hoy } }),
             // Operadores actualmente en turno en cualquier línea
             OperadoresModel.countDocuments({ status: { $in: ["en_linea", "turno_abierto", "ocupado"] } }),
             // Líneas operativas
             LineasModel.countDocuments({ activa: true }),
-            // Contactos únicos que enviaron mensajes hoy (chats activos)
-            MensajesModel.distinct("cliente_numero", {
-                direccion: "entrante",
-                timestamp_whatsapp: { $gte: hoy },
-            }).then((nums) => nums.length),
         ]);
 
         return NextResponse.json({
