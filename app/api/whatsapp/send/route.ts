@@ -11,7 +11,7 @@ const WA_API_BASE = 'https://graph.facebook.com';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { phone, message, type = 'text', chatId } = body;
+        const { phone, message, type = 'text', chatId, caption } = body;
 
         if (!phone || !message || !chatId) {
             return NextResponse.json(
@@ -51,9 +51,13 @@ export async function POST(req: NextRequest) {
         if (type === 'text') {
             requestPayload.type = 'text';
             requestPayload.text = { preview_url: false, body: message };
-        } else if (type === 'image') {
-            requestPayload.type = 'image';
-            requestPayload.image = { link: message };
+        } else if (type === 'image' || type === 'document' || type === 'video' || type === 'audio' || type === 'sticker') {
+            requestPayload.type = type;
+            if (caption && (type === 'image' || type === 'video' || type === 'document')) {
+                requestPayload[type] = { id: message, caption };
+            } else {
+                requestPayload[type] = { id: message };
+            }
         } else {
             // Tipo desconocido — enviar como texto
             requestPayload.type = 'text';
@@ -81,18 +85,38 @@ export async function POST(req: NextRequest) {
         const waData = await waResponse.json();
         const messageId: string = waData?.messages?.[0]?.id ?? `sent-${Date.now()}`;
 
+        const isMediaOut = type !== 'text';
+        const generatedMediaUrl = isMediaOut ? `/api/whatsapp/media/${message}?lineaId=${chat.linea.toString()}` : undefined;
+
         // 4. Guardar el mensaje saliente en el chat
         const now = new Date();
         const nuevoMensaje = {
             _id: new mongoose.Types.ObjectId(),
             origen: 'operador' as const,
-            texto: message,
+            texto: isMediaOut ? (caption || '') : message,
             timestamp: now,
-            leido: true,
+            leido: true, // El operador lee su propio mensaje
+            estado: 'enviado' as const,
+            wa_message_id: messageId !== `sent-${now.getTime()}` /* just fallback */ ? messageId : undefined,
+            tipo: type,
+            media_url: generatedMediaUrl
         };
 
-        chat.mensajes.push(nuevoMensaje);
+        chat.mensajes.push(nuevoMensaje as any);
         chat.ultimoMensaje = now;
+        // Cuando un operador responde, tomar control del chat automáticamente
+        if (chat.estado !== 'en_atencion' && chat.estado !== 'cerrado') {
+            chat.estado = 'en_atencion';
+            // Notificar cambio de estado por Socket
+            const ioRef = (global as { io?: import('socket.io').Server }).io;
+            if (ioRef) {
+                const lineaIdStr = chat.linea.toString();
+                ioRef.to(`linea:${lineaIdStr}`).to('linea:admin').emit('chat:estado_cambiado', {
+                    chatId,
+                    estado: 'en_atencion',
+                });
+            }
+        }
         await chat.save();
 
         // 5. Emitir evento Socket.io
@@ -105,6 +129,9 @@ export async function POST(req: NextRequest) {
                 texto: nuevoMensaje.texto,
                 timestamp: now.toISOString(),
                 leido: nuevoMensaje.leido,
+                estado: nuevoMensaje.estado,
+                tipo: nuevoMensaje.tipo,
+                media_url: nuevoMensaje.media_url
             };
 
             // Al panel de conversación abierto

@@ -48,6 +48,12 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
                 updateData.rol = rol;
             }
             if (linea !== undefined) {
+                if (!linea) {
+                    return NextResponse.json({ ok: false, error: "La línea es requerida" }, { status: 400 });
+                }
+                if (!mongoose.Types.ObjectId.isValid(linea)) {
+                    return NextResponse.json({ ok: false, error: "Formato de ID de línea inválido" }, { status: 400 });
+                }
                 updateData.linea = new mongoose.Types.ObjectId(linea);
             }
         } else if (user.rol === "admin_linea") {

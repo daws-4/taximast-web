@@ -26,6 +26,8 @@ export const SOCKET_EVENTS = {
     NUEVO_MENSAJE: "chat:nuevo_mensaje",
     NUEVO_CHAT: "chat:nuevo_chat",
     ESTADO_CAMBIADO: "chat:estado_cambiado",
+    MENSAJE_ESTADO: "chat:mensaje_estado",
+    CHAT_ELIMINADO: "chat:eliminado",
 } as const;
 
 // Eventos emitidos desde el cliente

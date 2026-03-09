@@ -237,6 +237,7 @@ function EditOperadorModal({ operador, lineas, user, onClose, onSuccess }: {
                                     <option value="admin">Administrador Global</option>
                                 </SelectField>
                                 <SelectField label="Línea Asignada" id="edit-linea" value={form.linea} onChange={set("linea") as any}>
+                                    <option value="">-- Seleccione una línea --</option>
                                     {lineas.map(l => (
                                         <option key={l._id} value={l._id}>{l.name}</option>
                                     ))}

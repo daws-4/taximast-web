@@ -52,6 +52,8 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         if (body.waba_id !== undefined) linea.waba_id = body.waba_id.trim();
         if (body.access_token !== undefined) linea.access_token = body.access_token.trim();
         if (body.verify_token !== undefined) linea.verify_token = body.verify_token.trim();
+        if (body.gemini_api_key !== undefined) linea.gemini_api_key = body.gemini_api_key.trim();
+        if (body.gemini_prompt !== undefined) linea.gemini_prompt = body.gemini_prompt.trim();
         if (body.activa !== undefined) linea.activa = body.activa;
 
         await linea.save();

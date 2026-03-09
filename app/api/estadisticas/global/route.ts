@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import MensajesModel from "@/models/Mensajes";
 import OperadoresModel from "@/models/Operadores";
 import LineasModel from "@/models/Lineas";
 import ChatsModel from "@/models/Chats";
@@ -17,16 +16,22 @@ async function handler(req: NextRequest) {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
 
+        // Contar mensajes de hoy usando el array embebido en Chats
+        const mensajesHoyAgg = await ChatsModel.aggregate([
+            { $unwind: "$mensajes" },
+            { $match: { "mensajes.timestamp": { $gte: hoy } } },
+            { $count: "total" },
+        ]);
+
+        const totalMensajesHoy = mensajesHoyAgg[0]?.total ?? 0;
+
         const [
             chatsActivosHoy,
-            totalMensajesHoy,
             operadoresEnLinea,
             lineasActivas,
         ] = await Promise.all([
             // Contactos únicos siendo atendidos o esperando (chats abiertos/pendientes)
-            ChatsModel.countDocuments({ estado: { $in: ["abierto", "pendiente"] } }),
-            // Total de mensajes enviados/recibidos hoy en todas las líneas
-            MensajesModel.countDocuments({ timestamp_whatsapp: { $gte: hoy } }),
+            ChatsModel.countDocuments({ estado: { $in: ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion"] } }),
             // Operadores actualmente en turno en cualquier línea
             OperadoresModel.countDocuments({ status: { $in: ["en_linea", "turno_abierto", "ocupado"] } }),
             // Líneas operativas

@@ -32,11 +32,11 @@ Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
 
 | Modelo | Descripción |
 |---|---|
-| `Lineas` | Configuración de cada empresa/línea de taxis (credenciales WhatsApp, tokens de Meta) |
+| `Lineas` | Configuración de cada empresa/línea de taxis (credenciales WhatsApp, tokens de Meta, API Key y prompt de Gemini) |
 | `Operadores` | Usuarios del sistema con roles (`admin`, `operador`, `admin_linea`) y estado de turno |
-| `Mensajes` | Cada mensaje individual del chat; referencia línea, operador, cliente y estado de entrega |
+| `Chats` | Conversaciones con mensajes embebidos, estado del ciclo de vida (`pendiente` → `bot_atendiendo` → `esperando_operador` → `en_atencion` → `cerrado`) |
 
-> 📌 Modelos planificados pero aún no creados: `Unidades` (vehículos), `Conductores`.
+> 📌 Modelos planificados pero aún no creados: `Unidades`, `Conductores` (ver sección Pendientes).
 
 ---
 
@@ -68,51 +68,62 @@ Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
 ## ✅ Estado del Desarrollo
 
 ### Completado
-
+#### Vistas 🖥️
+| Vista | Rol | Estado |
+|------------------------------------------------|------------------------|---------------|
+| Módulo de Chat Integral (`/chat` & `/[numero]`) | Todos -----------------| ✅ Completado |
+| Panel admin — líneas (`/admin/lineas`) --------| `admin` ---------------| ✅ Completado |
+| Panel admin — operadores (`/admin/operadores`) | `admin`, `admin_linea` | ✅ Completado |
+| Estadísticas globales (`/admin/estadisticas`) | `admin` ----------------| ✅ Completado |
 | Módulo | Descripción |
 |---|---|
+| **Landing Page** (`/`) | Página promocional del ecosistema TAXIMAST con tema oscuro institucional |
 | **Login** (`/login`) | Página de inicio de sesión con validación, manejo de errores y redirección |
 | **Auth JWT** | Generación, verificación y expiración (24h) de tokens JWT con cookie HttpOnly |
 | **Middleware de rutas** (`proxy.ts`) | Protección de rutas por autenticación y rol; redirección automática según permisos |
-| **Dashboard base** (`/dashboard`) | Vista de bienvenida con tarjetas de estadísticas (placeholders) y accesos rápidos según rol |
+| **Dashboard base** (`/dashboard`) | Vista de bienvenida base (en proceso de integración de datos) |
 | **API Auth** | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
-| **API WhatsApp** | `POST /api/whatsapp/send`, `POST /api/whatsapp/send-bulk`, `GET /api/whatsapp/status`, `POST /api/whatsapp/webhook`, `POST /api/whatsapp/location` |
-| **Modelos Mongoose** | `Lineas`, `Operadores`, `Mensajes` con índices optimizados |
+| **API WhatsApp** | Recepción básica y envío (estructura base en API route) |
+| **Modelos Mongoose** | `Lineas`, `Operadores`, `Mensajes`, `Chats` con índices optimizados |
 | **Control de acceso por rol** | 3 roles en `JWTPayload` y `proxy.ts`: `admin`, `operador`, `admin_linea` |
 
 ---
 
-### 🔲 Pendiente de Desarrollo
+#### Integración de Inteligencia Artificial 🤖
+| Tarea | Estado | Descripción |
+|---|---|---|
+| **Integración Directa de Google Gemini** | ✅ Completado | SDK de Gemini 2.5 Flash integrado en el backend para respuestas automáticas al cliente. |
+| **Gestión de API Keys por Línea** | ✅ Completado | Cada línea puede tener su propia API Key de Gemini (facturación independiente). |
+| **Ciclo de vida de estados del chat** | ✅ Completado | 5 estados: `pendiente` → `bot_atendiendo` → `esperando_operador` → `en_atencion` → `cerrado`, con transiciones automáticas y reapertura de chats cerrados. |
+| **Separación de pensamiento de la IA** | ✅ Completado | El razonamiento interno (chain-of-thought) de Gemini se guarda para los operadores pero NUNCA se envía al cliente. |
+| **Clasificación de solicitudes** | ✅ Completado | La IA clasifica automáticamente entre: traslado, objeto perdido, queja/sugerencia, y actúa en consecuencia. |
+| **Handoff automático IA → Operador** | ✅ Completado | Detección interna con etiqueta `[LISTO]` para cambiar automáticamente a `esperando_operador`. |
 
-#### Vistas
-| Vista | Rol | Estado |
-|------------------------------------------------|------------------------|---------------|
-| Vista de chat (`/chat`) -----------------------| Todos -----------------| ❌ Pendiente |
-| Chat individual (`/chat/[numero]`) ------------| Todos -----------------| ❌ Pendiente |
-| Panel admin — líneas (`/admin/lineas`) --------| `admin` ---------------| ❌ Pendiente |
-| Panel admin — operadores (`/admin/operadores`) | `admin`, `admin_linea` | ❌ Pendiente |
-| Estadísticas globales (`/admin/estadisticas`) | `admin` ----------------| ❌ Pendiente |
-| Dashboard con datos reales -------------------| Todos ------------------| ❌ Pendiente |
+#### Comunicaciones y Chat 💬
+| Tarea | Estado / Prioridad | Descripción |
+|---|---|---|
+| **Estados de Mensajes** | ✅ Completado | Estados visuales: Enviado, Entregado, Leído, Pendiente, Fallido. |
+| **Multimedia (Imágenes y Stickers)** | ✅ Completado | Envío y recepción de imágenes, stickers, audio, video y documentos. |
+| **Filtros y Búsqueda** | ✅ Completado | Búsqueda por nombre/teléfono y filtro por estado del chat. |
+| **Llamadas de WhatsApp** | ❌ Pendiente (BAJA) | Registrar o manejar avisos de llamadas entrantes por WhatsApp. |
 
-#### APIs Faltantes
-| Endpoint | Descripción |
-|---|---|
-| `GET /api/chats` | Lista de conversaciones agrupadas por contacto (con último mensaje y no leídos) |
-| `GET /api/chats/[numero]` | Historial completo de mensajes de un contacto |
-| `GET /api/admin/lineas` | Listar líneas (admin) |
-| `POST /api/admin/lineas` | Crear/editar línea |
-| `GET /api/admin/operadores` | Listar operadores (filtrado por línea si es admin_linea) |
-| `POST /api/admin/operadores` | Crear/editar operador |
-| `GET /api/admin/estadisticas` | Métricas globales o por línea |
+#### Módulo de Conductores 🚕 (PENDIENTE)
+| Tarea | Estado | Descripción |
+|---|---|---|
+| **Modelo `Conductores`** | ❌ Pendiente | Colección con datos del conductor: nombre, cédula, teléfono, unidad, foto de identificación. |
+| **API CRUD** | ❌ Pendiente | Endpoints para crear, listar, editar y eliminar conductores. Upload de foto. |
+| **Admin UI** | ❌ Pendiente | Panel admin con tabla, modal de creación/edición y upload de imagen. |
+| **Separación de chats** | ❌ Pendiente | Diferenciar chats de clientes vs conductores en el sidebar. Los chats de conductores NO activan la IA. |
+| **Envío de servicios** | ❌ Pendiente | Permitir al operador enviar datos de un servicio (pasajero, origen, destino) al conductor asignado. |
 
 #### Infraestructura
 | Tarea | Estado |
 |---|---|
-| Servidor Socket.io para mensajes en tiempo real | ❌ Pendiente |
-| Integración del webhook de WhatsApp con Socket.io (push a clientes conectados) | ❌ Pendiente |
-| Campo `linea` opcional para rol `admin` (actualmente `required: true`) | ❌ Pendiente |
-| Modelos `Unidades` y `Conductores` | ❌ Pendiente |
-| Chatbot IA para respuesta automática de WhatsApp | ❌ Pendiente (largo plazo) |
+| Servidor Socket.io para mensajes en tiempo real | ✅ Completado |
+| Integración del webhook de WhatsApp con Socket.io (push a clientes conectados) | ✅ Completado |
+| Lógica de líneas sin IA (status directo a `esperando_operador`) | ✅ Completado |
+| Modelo `Conductores` | ❌ Pendiente |
+| Modelo `Unidades` | ❌ Pendiente |
 
 ---
 
@@ -132,6 +143,7 @@ Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
    | `WA_PHONE_NUMBER_ID` | Phone Number ID de Meta for Developers |
    | `WA_ACCESS_TOKEN` | System User Token de WhatsApp Business API |
    | `WA_VERIFY_TOKEN` | Token de verificación para el webhook de Meta |
+   | `GEMINI_API_KEY` | (Próximamente) Clave maestra para IA en caso de fallback |
 
 4. Iniciar el entorno de desarrollo:
    ```bash
@@ -154,4 +166,4 @@ El servidor correrá en `http://localhost:3000`.
 
 ---
 
-📝 *Última actualización: Febrero 2026 — Se refleja el estado real del proyecto incluyendo el sistema de autenticación, middleware de roles y APIs de WhatsApp implementadas.*
+📝 *Última actualización: Marzo 2026 — Ciclo de vida del chat con IA, handoff automático, módulo de Conductores planificado.*

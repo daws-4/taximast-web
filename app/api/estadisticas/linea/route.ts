@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import MensajesModel from "@/models/Mensajes";
 import OperadoresModel from "@/models/Operadores";
 import ChatsModel from "@/models/Chats";
 import mongoose from "mongoose";
@@ -23,18 +22,35 @@ async function handler(req: NextRequest) {
 
         const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
+        // Contar mensajes de hoy y del mes usando el array embebido en Chats
+        const mensajesAgg = await ChatsModel.aggregate([
+            { $match: { linea: lineaId } },
+            { $unwind: "$mensajes" },
+            {
+                $facet: {
+                    hoy: [
+                        { $match: { "mensajes.timestamp": { $gte: hoy } } },
+                        { $count: "total" },
+                    ],
+                    mes: [
+                        { $match: { "mensajes.timestamp": { $gte: inicioMes } } },
+                        { $count: "total" },
+                    ],
+                },
+            },
+        ]);
+
+        const mensajesHoy = mensajesAgg[0]?.hoy?.[0]?.total ?? 0;
+        const mensajesMes = mensajesAgg[0]?.mes?.[0]?.total ?? 0;
+
         const [
             chatsActivosHoy,
-            mensajesHoy,
-            mensajesMes,
             operadoresEnLinea,
         ] = await Promise.all([
             ChatsModel.countDocuments({
                 linea: lineaId,
-                estado: { $in: ["abierto", "pendiente"] },
+                estado: { $in: ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion"] },
             }),
-            MensajesModel.countDocuments({ linea: lineaId, timestamp_whatsapp: { $gte: hoy } }),
-            MensajesModel.countDocuments({ linea: lineaId, timestamp_whatsapp: { $gte: inicioMes } }),
             OperadoresModel.countDocuments({
                 linea: lineaId,
                 status: { $in: ["en_linea", "turno_abierto", "ocupado"] },

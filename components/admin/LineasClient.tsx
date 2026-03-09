@@ -175,6 +175,22 @@ function Field({ label, id, ...props }: { label: string; id: string } & React.In
     );
 }
 
+function TextareaField({ label, id, ...props }: { label: string; id: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+    return (
+        <div className="flex flex-col gap-1">
+            <label htmlFor={id} className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>{label}</label>
+            <textarea
+                id={id}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none transition-colors min-h-[100px] resize-y"
+                style={{ backgroundColor: `${C.onyx}99`, borderColor: `${C.platinum}22`, color: C.platinum }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}66`)}
+                onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}22`)}
+                {...props}
+            />
+        </div>
+    );
+}
+
 // ─── Modal: Editar Línea ───────────────────────────────────────────────────
 type TokenStatus = "idle" | "loading" | "ok" | "error";
 
@@ -191,6 +207,8 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
         waba_id: "",
         access_token: "",
         verify_token: "",
+        gemini_api_key: "",
+        gemini_prompt: "",
         activa: linea.activa
     });
 
@@ -202,7 +220,7 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
     const [tokenStatus, setTokenStatus] = useState<TokenStatus>("idle");
     const [tokenMsg, setTokenMsg] = useState("");
 
-    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
     const setCredentialField = (k: "access_token" | "phone_number_id") => (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [k]: e.target.value }));
         setTokenStatus("idle");
@@ -342,6 +360,20 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
                         </div>
 
                         <Field label="Nuevo Verify Token (webhook)" id="edit-linea-verify" value={form.verify_token} onChange={set("verify_token")} placeholder="Solo si vas a cambiarlo" />
+                        
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
+                            <Field label="Nueva API Key de Google Gemini" id="edit-linea-gemini" type="password" value={form.gemini_api_key} onChange={set("gemini_api_key")} placeholder="AIzaSy..." />
+                            <p className="text-[10px] mt-1 mb-3" style={{ color: `${C.platinum}66` }}>Dejar en blanco para no cambiarla. Cada línea tiene facturación de cuota independiente.</p>
+                            <TextareaField 
+                                label="Instrucciones del Sistema (Prompt)" 
+                                id="edit-linea-prompt" 
+                                value={form.gemini_prompt} 
+                                onChange={set("gemini_prompt")} 
+                                placeholder="Ej: Eres el asistente virtual de Taxi El Llano..." 
+                            />
+                            <p className="text-[10px] mt-1" style={{ color: `${C.platinum}66` }}>Aquí puedes modificar cómo se comporta y qué información utiliza la inteligencia artificial de esta línea.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -381,7 +413,7 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
 
 // ─── Modal: Nueva Línea ────────────────────────────────────────────────────
 function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-    const [form, setForm] = useState({ name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "" });
+    const [form, setForm] = useState({ name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", gemini_api_key: "", gemini_prompt: "" });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -394,7 +426,7 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         setTokenMsg("");
     };
 
-    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
     async function handleVerify() {
         if (!form.access_token.trim() || !form.phone_number_id.trim()) return;
@@ -490,6 +522,20 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                         </div>
 
                         <Field label="Verify Token (webhook)" id="new-linea-verify" value={form.verify_token} onChange={set("verify_token")} placeholder="Token de verificación del webhook" />
+                        
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
+                            <Field label="API Key de Google Gemini (Opcional)" id="new-linea-gemini" type="password" value={form.gemini_api_key} onChange={set("gemini_api_key")} placeholder="AIzaSy..." />
+                            <p className="text-[10px] mt-1 mb-3" style={{ color: `${C.platinum}66` }}>Requerida para habilitar el agente de IA para esta línea.</p>
+                            <TextareaField 
+                                label="Instrucciones del Sistema (Prompt)" 
+                                id="new-linea-prompt" 
+                                value={form.gemini_prompt} 
+                                onChange={set("gemini_prompt")} 
+                                placeholder="Ej: Eres el asistente virtual amable de Taxi El Llano..." 
+                            />
+                            <p className="text-[10px] mt-1" style={{ color: `${C.platinum}66` }}>Opcional. Define cómo debe responder el asistente a los clientes.</p>
+                        </div>
                     </div>
                 </div>
                 {error && <p className="text-xs" style={{ color: "#f87171" }}>{error}</p>}

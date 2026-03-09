@@ -84,7 +84,7 @@ async function postHandler(req: NextRequest) {
             linea: resolvedLinea,
             cliente_phone: cliente_phone.trim(),
             cliente_nombre: cliente_nombre?.trim(),
-            estado: "abierto",
+            estado: "en_atencion",
         });
 
         // Emitir evento Socket.io si el servidor está disponible

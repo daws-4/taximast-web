@@ -39,7 +39,7 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token } = body;
+        const { name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token, gemini_api_key, gemini_prompt } = body;
 
         if (!name || !whatsapp_number || !phone_number_id || !waba_id || !access_token) {
             return NextResponse.json(
@@ -55,6 +55,8 @@ async function postHandler(req: NextRequest) {
             waba_id: waba_id.trim(),
             access_token: access_token.trim(),
             verify_token: verify_token?.trim() || undefined,
+            gemini_api_key: gemini_api_key?.trim() || undefined,
+            gemini_prompt: gemini_prompt?.trim() || undefined,
             activa: true,
         });
 

@@ -46,7 +46,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const { estado, operador } = body;
 
-    const allowed: string[] = ["abierto", "cerrado", "pendiente"];
+    const allowed: string[] = ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion", "cerrado"];
     if (estado && !allowed.includes(estado)) {
         return NextResponse.json({ ok: false, error: "Estado inválido" }, { status: 400 });
     }
@@ -67,7 +67,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
 
         // Emitir evento Socket.io
         if (global.io) {
-            global.io.to(`linea:${lineaId}`).emit("chat:estado_cambiado", {
+            global.io.to(`linea:${lineaId}`).to('linea:admin').emit("chat:estado_cambiado", {
                 chatId: id,
                 estado: chat.estado,
             });
@@ -82,3 +82,37 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
 
 export const GET = withAuth(getHandler);
 export const PATCH = withAuth(patchHandler);
+
+// DELETE /api/chats/[id] — Eliminar chat
+async function deleteHandler(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const user = getUserFromRequest(req);
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+
+    const { id } = await params;
+
+    await connectDB();
+
+    try {
+        const chat = await ChatsModel.findById(id);
+        if (!chat) return NextResponse.json({ ok: false, error: "Chat no encontrado" }, { status: 404 });
+
+        const lineaId = chat.linea?.toString();
+        if (user.rol !== "admin" && lineaId !== user.linea) {
+            return NextResponse.json({ ok: false, error: "Sin permisos" }, { status: 403 });
+        }
+
+        await ChatsModel.findByIdAndDelete(id);
+
+        // Notificar al sidebar para que elimine el chat
+        if (global.io) {
+            global.io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:eliminado', { chatId: id });
+        }
+
+        return NextResponse.json({ ok: true, data: { deletedId: id } });
+    } catch (error) {
+        console.error(`[/api/chats/${id} DELETE] Error:`, error);
+        return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
+    }
+}
+
+export const DELETE = withAuth(deleteHandler);

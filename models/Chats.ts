@@ -3,6 +3,7 @@ import mongoose, { Document, Model, Schema } from "mongoose";
 // Garantizar que los modelos referenciados se registren en Mongoose antes
 import "./Lineas";
 import "./Operadores";
+import "./Conductores";
 
 // ─── Subdocumento: Mensaje ────────────────────────────────────────────────────
 export interface IMessage {
@@ -11,6 +12,10 @@ export interface IMessage {
     texto: string;
     timestamp: Date;
     leido: boolean;
+    estado?: "pendiente" | "enviado" | "entregado" | "leido" | "fallido";
+    tipo?: "text" | "image" | "audio" | "video" | "document" | "location" | "template" | "sticker" | string;
+    wa_message_id?: string;
+    media_url?: string;
 }
 
 const MensajeSchema = new Schema<IMessage>(
@@ -33,6 +38,22 @@ const MensajeSchema = new Schema<IMessage>(
             type: Boolean,
             default: false,
         },
+        estado: {
+            type: String,
+            enum: ["pendiente", "enviado", "entregado", "leido", "fallido"],
+            default: "pendiente",
+        },
+        tipo: {
+            type: String,
+            default: "text",
+        },
+        media_url: {
+            type: String,
+        },
+        wa_message_id: {
+            type: String,
+            sparse: true,
+        },
     },
     { _id: true }
 );
@@ -43,7 +64,9 @@ export interface IChat extends Document {
     operador?: mongoose.Types.ObjectId;
     cliente_phone: string;
     cliente_nombre?: string;
-    estado: "abierto" | "cerrado" | "pendiente";
+    tipo_chat: "cliente" | "conductor";
+    conductor?: mongoose.Types.ObjectId;
+    estado: "pendiente" | "bot_atendiendo" | "esperando_operador" | "en_atencion" | "cerrado";
     mensajes: IMessage[];
     ultimoMensaje: Date;
     createdAt: Date;
@@ -76,10 +99,22 @@ const ChatsSchema = new Schema<IChat>(
             type: String,
             trim: true,
         },
+        // Tipo de conversación: cliente o conductor
+        tipo_chat: {
+            type: String,
+            enum: ["cliente", "conductor"],
+            default: "cliente",
+        },
+        // Referencia al conductor (si tipo_chat === "conductor")
+        conductor: {
+            type: Schema.Types.ObjectId,
+            ref: "Conductores",
+            default: null,
+        },
         // Estado de la conversación
         estado: {
             type: String,
-            enum: ["abierto", "cerrado", "pendiente"],
+            enum: ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion", "cerrado"],
             default: "pendiente",
         },
         // Array de mensajes embebido para evitar joins costosos

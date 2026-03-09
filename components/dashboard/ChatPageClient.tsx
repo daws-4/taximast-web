@@ -21,7 +21,7 @@ interface ChatSummary {
     operador?: { nombre: string; apellido: string };
     cliente_phone: string;
     cliente_nombre?: string;
-    estado: "abierto" | "cerrado" | "pendiente";
+    estado: "pendiente" | "bot_atendiendo" | "esperando_operador" | "en_atencion" | "cerrado";
     ultimoMensaje: string;
 }
 
@@ -30,7 +30,9 @@ interface Message {
     origen: "cliente" | "operador" | "sistema";
     texto: string;
     timestamp: string;
-    leido: boolean;
+    estado?: "pendiente" | "enviado" | "entregado" | "leido" | "fallido";
+    tipo?: "text" | "image" | "audio" | "video" | "document" | "location" | "template" | string;
+    media_url?: string;
 }
 
 interface ChatDetail extends ChatSummary {
@@ -39,9 +41,19 @@ interface ChatDetail extends ChatSummary {
 
 // ─── Helpers de estilo ────────────────────────────────────────────────────────
 const ESTADO_COLOR: Record<string, string> = {
-    abierto: "#4ade80",
     pendiente: "#fbe134",
+    bot_atendiendo: "#60a5fa",
+    esperando_operador: "#f97316",
+    en_atencion: "#4ade80",
     cerrado: "#94a3b8",
+};
+
+const ESTADO_LABEL: Record<string, string> = {
+    pendiente: "Pendiente",
+    bot_atendiendo: "Bot atendiendo",
+    esperando_operador: "Esperando operador",
+    en_atencion: "En atención",
+    cerrado: "Cerrado",
 };
 
 function formatTime(iso: string) {
@@ -59,7 +71,7 @@ function formatDate(iso: string) {
 // ─── Chip de estado ──────────────────────────────────────────────────────────
 function EstadoChip({ estado }: { estado: string }) {
     const color = ESTADO_COLOR[estado] ?? C.platinum;
-    const label = { abierto: "Abierto", pendiente: "Pendiente", cerrado: "Cerrado" }[estado] ?? estado;
+    const label = ESTADO_LABEL[estado] ?? estado;
     return (
         <span
             className="text-xs px-1.5 py-0.5 rounded-full font-medium"
@@ -121,43 +133,141 @@ function ChatListItem({
     );
 }
 
+// ─── Componentes de Estado de Mensaje ─────────────────────────────────────────
+function MessageStatusIcon({ isClient, estado }: { isClient: boolean, estado?: string }) {
+    if (isClient || !estado) return null;
+    
+    // Iconos simulan los ticks de WhatsApp
+    if (estado === "pendiente") return <span className="text-[10px]" style={{ color: `${C.brightGold}55` }}>🕒</span>;
+    if (estado === "enviado") return <span className="text-[10px]" style={{ color: `${C.brightGold}77` }}>✓</span>;
+    if (estado === "entregado") return <span className="text-[10px]" style={{ color: `${C.brightGold}77` }}>✓✓</span>;
+    if (estado === "leido") return <span className="text-[10px]" style={{ color: "#4ade80" }}>✓✓</span>;
+    if (estado === "fallido") return <span className="text-[10px]" style={{ color: "#ef4444" }}>!</span>;
+    return null;
+}
+
 // ─── Burbuja de mensaje ───────────────────────────────────────────────────────
 function MessageBubble({ msg }: { msg: Message }) {
     const isClient = msg.origen === "cliente";
     const isSistema = msg.origen === "sistema";
+    const isThinking = msg.tipo === "ai_thinking";
 
-    if (isSistema) {
+    // Pensamiento interno de la IA — solo visible para operadores
+    if (isThinking) {
         return (
-            <div className="flex justify-center">
-                <span
-                    className="text-xs px-3 py-1 rounded-full"
-                    style={{ backgroundColor: `${C.platinum}10`, color: `${C.platinum}55` }}
+            <details className="my-2 mx-auto max-w-[90%]">
+                <summary
+                    className="text-[11px] cursor-pointer select-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors hover:bg-white/5"
+                    style={{ color: `${C.platinum}55` }}
+                >
+                    <span>🧠</span>
+                    <span className="font-medium">Pensamiento de la IA</span>
+                    <span className="text-[9px] ml-auto" style={{ color: `${C.platinum}33` }}>{formatTime(msg.timestamp)}</span>
+                </summary>
+                <div
+                    className="mt-1 px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap border-l-2"
+                    style={{
+                        color: `${C.platinum}66`,
+                        backgroundColor: `${C.platinum}05`,
+                        borderColor: `${C.platinum}15`,
+                        fontStyle: "italic",
+                    }}
                 >
                     {msg.texto}
-                </span>
+                </div>
+            </details>
+        );
+    }
+
+    // Mensajes de la IA (sistema) — se muestran como burbujas de chat completas
+    if (isSistema) {
+        return (
+            <div className="flex justify-end mb-1 group">
+                <div
+                    className="max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-sm relative"
+                    style={{
+                        backgroundColor: "#60a5fa18",
+                        color: "#93c5fd",
+                        borderBottomRightRadius: "4px",
+                        border: "1px solid #60a5fa25",
+                    }}
+                >
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-xs">🤖</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#60a5fa88" }}>
+                            Asistente IA
+                        </span>
+                    </div>
+                    <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.texto}</p>
+                    <div className="flex items-center justify-end gap-1.5 mt-1">
+                        <p className="text-[10px]" style={{ color: "#60a5fa55" }}>
+                            {formatTime(msg.timestamp)}
+                        </p>
+                        <MessageStatusIcon isClient={false} estado={msg.estado} />
+                    </div>
+                </div>
             </div>
         );
     }
 
+    const isMedia = ["image", "video", "audio", "document", "location", "sticker", "voice"].includes(msg.tipo ?? "");
+
     return (
-        <div className={`flex ${isClient ? "justify-start" : "justify-end"}`}>
+        <div className={`flex ${isClient ? "justify-start" : "justify-end"} mb-1 group`}>
             <div
-                className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm"
+                className="max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-sm relative"
                 style={{
                     backgroundColor: isClient ? `${C.jetBlack}` : `${C.brightGold}22`,
                     color: isClient ? C.platinum : C.brightGold,
-                    borderBottomLeftRadius: isClient ? "4px" : undefined,
-                    borderBottomRightRadius: !isClient ? "4px" : undefined,
+                    borderBottomLeftRadius: isClient ? "4px" : "16px",
+                    borderBottomRightRadius: !isClient ? "4px" : "16px",
                     border: `1px solid ${isClient ? `${C.platinum}10` : `${C.brightGold}33`}`,
                 }}
             >
-                <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.texto}</p>
-                <p
-                    className="text-right mt-1 text-xs"
-                    style={{ color: isClient ? `${C.platinum}44` : `${C.brightGold}77` }}
+                {/* Multimedia Rendering Proxy */}
+                {isMedia && (
+                    <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : 'bg-black/20 min-h-[120px] min-w-[120px]'}`}>
+                        {msg.tipo === "image" || msg.tipo === "sticker" ? (
+                            msg.media_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={msg.media_url} alt={msg.tipo} className={`max-w-full max-h-[300px] object-contain ${msg.tipo === 'sticker' ? 'bg-transparent' : 'rounded-lg'}`} />
+                            ) : (
+                                <span className="text-xl">{msg.tipo === 'sticker' ? '👽' : '📷'}</span>
+                            )
+                        ) : msg.tipo === "video" ? (
+                            msg.media_url ? (
+                                <video src={msg.media_url} controls className="max-w-full max-h-[300px] rounded-lg" />
+                            ) : (
+                                <span className="text-xl">🎥</span>
+                            )
+                        ) : msg.tipo === "audio" || msg.tipo === "voice" ? (
+                            msg.media_url ? (
+                                <audio src={msg.media_url} controls className="w-full max-w-[250px] h-10" />
+                            ) : (
+                                <span className="text-xl">🎵</span>
+                            )
+                        ) : msg.tipo === "location" ? (
+                            <span className="text-xl">📍</span>
+                        ) : (
+                            <div className="flex flex-col items-center">
+                                <span className="text-xl mb-1">📄</span>
+                                {msg.media_url && <a href={msg.media_url} download className="text-xs hover:underline text-blue-400 mt-1">Descargar</a>}
+                            </div>
+                        )}
+                        {(msg.tipo !== 'audio' && msg.tipo !== 'voice') && <span className="absolute bottom-2 right-2 text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded shadow-sm" style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: C.platinum }}>{msg.tipo}</span>}
+                    </div>
+                )}
+
+                {msg.texto && <p className="leading-relaxed whitespace-pre-wrap break-words mt-1">{msg.texto}</p>}
+                
+                <div
+                    className="flex items-center justify-end gap-1.5 mt-1"
                 >
-                    {formatTime(msg.timestamp)}
-                </p>
+                    <p className="text-[10px]" style={{ color: isClient ? `${C.platinum}44` : `${C.brightGold}77` }}>
+                        {formatTime(msg.timestamp)}
+                    </p>
+                    <MessageStatusIcon isClient={isClient} estado={msg.estado} />
+                </div>
             </div>
         </div>
     );
@@ -174,8 +284,10 @@ function ConversationPanel({
     const [chat, setChat] = useState<ChatDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [texto, setTexto] = useState("");
+    const [attachment, setAttachment] = useState<File | null>(null);
     const [sending, setSending] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const loadChat = useCallback(async () => {
         setLoading(true);
@@ -208,9 +320,24 @@ function ConversationPanel({
             }
         });
 
+        socket.on(SOCKET_EVENTS.MENSAJE_ESTADO, (payload: { chatId: string; mensajeId: string; estado: string }) => {
+            if (payload.chatId === chatId) {
+                setChat((prev) => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        mensajes: prev.mensajes.map((m) =>
+                            m._id === payload.mensajeId ? { ...m, estado: payload.estado as any } : m
+                        )
+                    };
+                });
+            }
+        });
+
         return () => {
             socket.emit(CLIENT_EVENTS.LEAVE_CHAT, chatId);
             socket.off(SOCKET_EVENTS.NUEVO_MENSAJE);
+            socket.off(SOCKET_EVENTS.MENSAJE_ESTADO);
         };
     }, [chatId, loadChat]);
 
@@ -221,25 +348,59 @@ function ConversationPanel({
 
     async function handleSend(e: React.FormEvent) {
         e.preventDefault();
-        if (!texto.trim() || !chat) return;
+        if ((!texto.trim() && !attachment) || !chat) return;
         setSending(true);
         const textToSend = texto.trim();
+        const currentAttachment = attachment;
         setTexto("");
-
-        // El Webhook / Send route emitirán el evento de Socket.io una vez guradado en la BD
-        // lo que actualizará el estado del chat instantáneamente sin causar duplicados visuales
+        setAttachment(null);
 
         try {
+            let mediaId = undefined;
+            let msgType = "text";
+
+            if (currentAttachment) {
+                // Determinar el tipo para WhatsApp
+                if (currentAttachment.type.startsWith("image/")) msgType = "image";
+                else if (currentAttachment.type.startsWith("video/")) msgType = "video";
+                else if (currentAttachment.type.startsWith("audio/")) msgType = "audio";
+                else msgType = "document";
+
+                // Subir el archivo temporalmente a Meta CDN
+                const formData = new FormData();
+                formData.append("file", currentAttachment);
+                // Si la línea es un objeto popularo, tomar su ._id, si es String, directo.
+                const lineaIdStr = typeof chat.linea === 'object' && chat.linea ? (chat.linea as any)._id : chat.linea;
+                formData.append("lineaId", lineaIdStr);
+
+                const uploadRes = await fetch("/api/whatsapp/media/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+                
+                const uploadData = await uploadRes.json();
+                if (!uploadData.success) {
+                    throw new Error(uploadData.error || "Error al subir adjunto");
+                }
+                mediaId = uploadData.mediaId;
+            }
+
+            // Despachar el mensaje a través de nuestra API Node
             await fetch("/api/whatsapp/send", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     phone: chat.cliente_phone,
-                    message: textToSend,
-                    type: "text",
+                    message: mediaId || textToSend,
+                    caption: mediaId ? textToSend : undefined,
+                    type: msgType,
                     chatId: chat._id,
                 }),
             });
+        } catch(error) {
+            console.error("Error sending message:", error);
+            setTexto(textToSend); // Restore inputs
+            setAttachment(currentAttachment);
         } finally {
             setSending(false);
         }
@@ -299,7 +460,37 @@ function ConversationPanel({
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <EstadoChip estado={chat.estado} />
+                    <select
+                        value={chat.estado}
+                        onChange={async (e) => {
+                            const nuevoEstado = e.target.value;
+                            try {
+                                const res = await fetch(`/api/chats/${chat._id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ estado: nuevoEstado }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                    setChat((prev) => prev ? { ...prev, estado: nuevoEstado as ChatDetail["estado"] } : prev);
+                                }
+                            } catch (err) {
+                                console.error("Error cambiando estado:", err);
+                            }
+                        }}
+                        className="text-xs px-2 py-1 rounded-lg border cursor-pointer outline-none"
+                        style={{
+                            backgroundColor: `${ESTADO_COLOR[chat.estado] ?? C.platinum}15`,
+                            borderColor: `${ESTADO_COLOR[chat.estado] ?? C.platinum}44`,
+                            color: ESTADO_COLOR[chat.estado] ?? C.platinum,
+                        }}
+                    >
+                        <option value="pendiente">🕒 Pendiente</option>
+                        <option value="bot_atendiendo">🤖 Bot atendiendo</option>
+                        <option value="esperando_operador">🔔 Esperando operador</option>
+                        <option value="en_atencion">✅ En atención</option>
+                        <option value="cerrado">🔒 Cerrado</option>
+                    </select>
                     {chat.linea && (
                         <span className="text-xs hidden sm:block" style={{ color: C.saffron }}>
                             {chat.linea.name}
@@ -323,47 +514,94 @@ function ConversationPanel({
                 <div ref={bottomRef} />
             </div>
 
-            {/* Input */}
-            <form
-                onSubmit={handleSend}
-                className="flex items-end gap-3 px-4 py-3 border-t shrink-0"
-                style={{ borderColor: `${C.platinum}10`, backgroundColor: `${C.onyx}cc` }}
-            >
-                <textarea
-                    rows={1}
-                    value={texto}
-                    onChange={(e) => setTexto(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend(e as unknown as React.FormEvent);
-                        }
-                    }}
-                    placeholder="Escribe un mensaje… (Enter para enviar)"
-                    maxLength={4096}
-                    className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm border outline-none transition-colors"
-                    style={{
-                        backgroundColor: `${C.jetBlack}`,
-                        borderColor: `${C.platinum}18`,
-                        color: C.platinum,
-                        maxHeight: "120px",
-                    }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}44`)}
-                    onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}18`)}
-                />
-                <button
-                    type="submit"
-                    disabled={sending || !texto.trim()}
-                    className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 cursor-pointer"
-                    style={{
-                        backgroundColor: C.brightGold,
-                        color: C.onyx,
-                        opacity: sending || !texto.trim() ? 0.5 : 1,
-                    }}
+            {/* Input Wrapper */}
+            <div className="flex flex-col border-t shrink-0" style={{ borderColor: `${C.platinum}10`, backgroundColor: `${C.onyx}cc` }}>
+                
+                {/* Preview de adjunto */}
+                {attachment && (
+                    <div className="px-4 pt-3 pb-1 flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-lg bg-black/30 flex items-center justify-center overflow-hidden border shrink-0" style={{ borderColor: `${C.platinum}18` }}>
+                            {attachment.type.startsWith('image/') ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={URL.createObjectURL(attachment)} alt="preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-xl">📄</span>
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate font-medium" style={{ color: C.platinum }}>{attachment.name}</p>
+                            <p className="text-xs" style={{ color: `${C.platinum}66` }}>{(attachment.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <button onClick={() => setAttachment(null)} type="button" className="p-2 rounded-full hover:bg-white/5 cursor-pointer" style={{ color: '#ef4444' }} title="Quitar archivo">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                )}
+
+                <form
+                    onSubmit={handleSend}
+                    className="flex items-end gap-2 px-4 py-3"
                 >
-                    {sending ? "…" : "Enviar"}
-                </button>
-            </form>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                                setAttachment(e.target.files[0]);
+                                e.target.value = ''; // reset buffer
+                            }
+                        }}
+                    />
+                    {/* Botón Adjuntar */}
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-3 rounded-xl transition-colors shrink-0 flex items-center justify-center hover:bg-white/5 cursor-pointer"
+                        style={{ color: `${C.platinum}88` }}
+                        title="Adjuntar multimedia"
+                    >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                    </button>
+
+                    <textarea
+                        rows={1}
+                        value={texto}
+                        onChange={(e) => setTexto(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend(e as unknown as React.FormEvent);
+                            }
+                        }}
+                        placeholder={attachment ? "Añade un comentario..." : "Escribe un mensaje… (Enter para enviar)"}
+                        maxLength={4096}
+                        className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm border outline-none transition-colors"
+                        style={{
+                            backgroundColor: `${C.jetBlack}`,
+                            borderColor: `${C.platinum}18`,
+                            color: C.platinum,
+                            maxHeight: "120px",
+                        }}
+                        onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}44`)}
+                        onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}18`)}
+                    />
+                    <button
+                        type="submit"
+                        disabled={sending || (!texto.trim() && !attachment)}
+                        className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 cursor-pointer"
+                        style={{
+                            backgroundColor: C.brightGold,
+                            color: C.onyx,
+                            opacity: sending || (!texto.trim() && !attachment) ? 0.5 : 1,
+                        }}
+                    >
+                        {sending ? "…" : "Enviar"}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }
@@ -407,6 +645,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [lineas, setLineas] = useState<{ _id: string; name: string }[]>([]);
     const [lineaFilter, setLineaFilter] = useState<string>("");
+    const [estadoFilter, setEstadoFilter] = useState<string>("");
     const [q, setQ] = useState("");
     const [loadingList, setLoadingList] = useState(true);
     const [mobileShowPanel, setMobileShowPanel] = useState(false);
@@ -419,6 +658,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
         setLoadingList(true);
         const params = new URLSearchParams();
         if (lineaFilter) params.set("linea", lineaFilter);
+        if (estadoFilter) params.set("estado", estadoFilter);
         if (search) params.set("q", search);
         try {
             const res = await fetch(`/api/chats?${params}`);
@@ -427,7 +667,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
         } finally {
             setLoadingList(false);
         }
-    }, [lineaFilter]);
+    }, [lineaFilter, estadoFilter]);
 
     // ── Cargar líneas (solo admin) ────────────────────────────────────────────
     const fetchLineas = useCallback(async () => {
@@ -477,10 +717,17 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
             );
         });
 
+        // Chat eliminado → quitarlo de la lista
+        socket.on(SOCKET_EVENTS.CHAT_ELIMINADO, (payload: { chatId: string }) => {
+            setChats((prev) => prev.filter((c) => c._id !== payload.chatId));
+            setSelectedId((prev) => (prev === payload.chatId ? null : prev));
+        });
+
         return () => {
             socket.off(SOCKET_EVENTS.NUEVO_MENSAJE);
             socket.off(SOCKET_EVENTS.NUEVO_CHAT);
             socket.off(SOCKET_EVENTS.ESTADO_CAMBIADO);
+            socket.off(SOCKET_EVENTS.CHAT_ELIMINADO);
         };
     }, [isAdmin, user.linea]);
 
@@ -570,6 +817,27 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                                 ))}
                             </select>
                         )}
+
+                        {/* Filtro de Estado (Pendientes, Abiertos, Cerrados) */}
+                        <select
+                            value={estadoFilter}
+                            onChange={(e) => {
+                                setEstadoFilter(e.target.value);
+                            }}
+                            className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                            style={{
+                                backgroundColor: C.jetBlack,
+                                borderColor: `${C.platinum}22`,
+                                color: estadoFilter ? C.platinum : `${C.platinum}66`,
+                            }}
+                        >
+                            <option value="">Todos los chats</option>
+                            <option value="pendiente">🕒 Pendientes</option>
+                            <option value="bot_atendiendo">🤖 Bot atendiendo</option>
+                            <option value="esperando_operador">🔔 Esperando operador</option>
+                            <option value="en_atencion">✅ En atención</option>
+                            <option value="cerrado">🔒 Cerrados</option>
+                        </select>
 
                         {/* Buscador */}
                         <div className="relative">

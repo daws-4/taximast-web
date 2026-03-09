@@ -597,6 +597,9 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                                 <QuickAction label="Gestionar operadores" icon={<UserIcon className="w-4 h-4" />} onClick={() => router.push("/admin/operadores")} />
                             )}
                             {(user.rol === "admin" || user.rol === "admin_linea") && (
+                                <QuickAction label="Gestionar conductores" icon={<UserIcon className="w-4 h-4" />} onClick={() => router.push("/admin/conductores")} />
+                            )}
+                            {(user.rol === "admin" || user.rol === "admin_linea") && (
                                 <QuickAction label="Ver estadísticas" icon={<LineIcon className="w-4 h-4" />} onClick={() => router.push("/admin/estadisticas")} />
                             )}
 

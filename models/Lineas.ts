@@ -7,6 +7,8 @@ export interface ILinea extends Document {
     waba_id: string;
     access_token: string;
     verify_token?: string;
+    gemini_api_key?: string;
+    gemini_prompt?: string;
     activa: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -49,6 +51,18 @@ const LineasSchema = new mongoose.Schema<ILinea>(
         },
         // Token de verificación usado por los webhooks de Meta
         verify_token: {
+            type: String,
+            trim: true,
+            select: false,
+        },
+        // Clave de API de Google Gemini para procesamiento de IA individual
+        gemini_api_key: {
+            type: String,
+            trim: true,
+            select: false,
+        },
+        // Prompt del sistema personalizado para el asistente de esta línea
+        gemini_prompt: {
             type: String,
             trim: true,
             select: false,
