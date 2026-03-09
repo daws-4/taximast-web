@@ -5,11 +5,6 @@ import { Button } from "@heroui/button";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 
 export default function Home() {
-let contador = 0;
-
-const incrementarContador = () => {
-    console.log("Contador incrementado a: " + contador);
-};
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -18,13 +13,13 @@ const incrementarContador = () => {
         {/* <ChefsitoIcon width={100} height={100} /> */}
         <h1 className={title({ size: "lg" })}>
           Bienvenido al futuro de tu <br />
-          <span className={`${title({ size: "lg" })} text-saffron`}>Línea de Taxis. {contador}</span>
+          <span className={`${title({ size: "lg" })} text-saffron`}>Línea de Taxis.</span>
         </h1>
         <p className={`${subtitle({ class: "mt-4 max-w-2xl" })} text-default-600`}>
           Descubre el Ecosistema <strong>TAXIMAST</strong>: La solución definitiva que integra escritorio, web e inteligencia artificial para automatizar tu comunicación por WhatsApp Oficial.
         </p>
         <div className="flex gap-4 mt-4">
-          <Button onPress={incrementarContador} className="bg-saffron text-onyx font-bold" variant="shadow" size="lg" radius="full">
+          <Button className="bg-saffron text-onyx font-bold" variant="shadow" size="lg" radius="full">
             Empezar Ahora
           </Button>
           <Button className="border-saffron text-saffron" variant="bordered" size="lg" radius="full">
@@ -37,7 +32,7 @@ const incrementarContador = () => {
       <section className="py-20 px-6 bg-default-50">
         <div className="max-w-7xl mx-auto">
           <h2 className={`${title({ size: "md" })} text-center mb-12 block`}>El Ecosistema TAXIMAST</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Card 1: TAXIMAST Desktop */}
             <Card className="py-4 shadow-lg hover:-translate-y-1 transition-transform bg-background/60 dark:bg-default-100/50 backdrop-blur-md border border-white/20">
@@ -60,7 +55,7 @@ const incrementarContador = () => {
             {/* Card 2: TAXIMAST Web */}
             <Card className="py-4 shadow-lg hover:-translate-y-1 transition-transform bg-background/60 dark:bg-default-100/50 backdrop-blur-md border border-white/20">
               <CardHeader className="pb-0 pt-2 px-4 flex-col items-start gap-2">
-                 <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-platinum/50 dark:bg-jet-black/50 text-onyx dark:text-platinum">
                     🌐
                   </span>
@@ -143,7 +138,7 @@ const incrementarContador = () => {
           </div>
         </div>
       </section>
-      
+
       {/* Footer */}
       <footer className="w-full py-8 text-center text-default-400 bg-background border-t border-divider">
         <p>© {new Date().getFullYear()} TAXIMAST. Todos los derechos reservados.</p>
