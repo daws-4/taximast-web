@@ -25,7 +25,7 @@ interface LoginCardProps {
     onSubmit: (e: FormEvent<HTMLFormElement>) => void;
 }
 
-export function LoginCard({
+export default function LoginCard({
     username,
     password,
     isLoading,

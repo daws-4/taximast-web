@@ -2,7 +2,7 @@
 
 import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LoginCard } from "@/components/login/LoginCard";
+import LoginCard from "@/components/login/LoginCard";
 
 function LoginForm() {
     const router = useRouter();

@@ -1,21 +1,30 @@
+'use client';
 import { title, subtitle } from "@/components/primitives";
+import { ChefsitoIcon } from "@/components/icons";
 import { Button } from "@heroui/button";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 
 export default function Home() {
+let contador = 0;
+
+const incrementarContador = () => {
+    console.log("Contador incrementado a: " + contador);
+};
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
       <section className="flex flex-col items-center justify-center gap-6 py-20 px-6 text-center">
+        {/* <ChefsitoIcon width={100} height={100} /> */}
         <h1 className={title({ size: "lg" })}>
           Bienvenido al futuro de tu <br />
-          <span className={`${title({ size: "lg" })} text-saffron`}>Línea de Taxis.</span>
+          <span className={`${title({ size: "lg" })} text-saffron`}>Línea de Taxis. {contador}</span>
         </h1>
         <p className={`${subtitle({ class: "mt-4 max-w-2xl" })} text-default-600`}>
           Descubre el Ecosistema <strong>TAXIMAST</strong>: La solución definitiva que integra escritorio, web e inteligencia artificial para automatizar tu comunicación por WhatsApp Oficial.
         </p>
         <div className="flex gap-4 mt-4">
-          <Button className="bg-saffron text-onyx font-bold" variant="shadow" size="lg" radius="full">
+          <Button onPress={incrementarContador} className="bg-saffron text-onyx font-bold" variant="shadow" size="lg" radius="full">
             Empezar Ahora
           </Button>
           <Button className="border-saffron text-saffron" variant="bordered" size="lg" radius="full">
