@@ -126,6 +126,11 @@ async function processWebhook(body: Record<string, any>) {
         return;
     }
 
+    if (linea.activa === false) {
+        console.warn(`[webhook] Mensaje ignorado: La línea "${linea.name}" (${phoneNumberId}) está inactiva.`);
+        return;
+    }
+
     const lineaId = linea._id.toString();
 
     // 2.5 Manejar actualizaciones de estado (Enviado, Entregado, Leído, Fallido)

@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, getUserFromRequest } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { uploadDriverPhoto } from "@/lib/pocketbase";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "conductores");
-
-// POST /api/admin/conductores/upload — subir foto de identificación
+// POST /api/admin/conductores/upload — subir foto de identificación a PocketBase
 async function postHandler(req: NextRequest) {
     const user = getUserFromRequest(req);
     if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
@@ -16,9 +13,14 @@ async function postHandler(req: NextRequest) {
     try {
         const formData = await req.formData();
         const file = formData.get("foto") as File | null;
+        const telefono = formData.get("telefono") as string | null;
 
         if (!file) {
             return NextResponse.json({ ok: false, error: "No se envió ningún archivo" }, { status: 400 });
+        }
+
+        if (!telefono) {
+            return NextResponse.json({ ok: false, error: "Se requiere el campo 'telefono' para asociar la foto" }, { status: 400 });
         }
 
         // Validar tipo de archivo
@@ -32,19 +34,17 @@ async function postHandler(req: NextRequest) {
             return NextResponse.json({ ok: false, error: "El archivo no puede superar 5MB" }, { status: 400 });
         }
 
-        // Crear directorio si no existe
-        await mkdir(UPLOAD_DIR, { recursive: true });
-
-        // Generar nombre único
-        const ext = file.name.split(".").pop() || "jpg";
-        const filename = `conductor_${Date.now()}.${ext}`;
-        const filepath = path.join(UPLOAD_DIR, filename);
-
-        // Escribir archivo
+        // Subir a PocketBase
         const bytes = await file.arrayBuffer();
-        await writeFile(filepath, new Uint8Array(bytes));
+        const buffer = Buffer.from(bytes);
+        const url = await uploadDriverPhoto(telefono, buffer, file.name);
 
-        const url = `/uploads/conductores/${filename}`;
+        if (!url) {
+            return NextResponse.json(
+                { ok: false, error: "Error al subir la foto a PocketBase. Verifica la conexión." },
+                { status: 502 }
+            );
+        }
 
         return NextResponse.json({ ok: true, data: { url } }, { status: 201 });
     } catch (error) {

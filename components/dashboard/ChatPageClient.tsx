@@ -307,7 +307,7 @@ function ConversationPanel({
         const socket = getSocket();
         socket.emit(CLIENT_EVENTS.JOIN_CHAT, chatId);
 
-        socket.on(SOCKET_EVENTS.NUEVO_MENSAJE, (payload: { chatId: string; mensaje: Message }) => {
+        const handleNuevoMensaje = (payload: { chatId: string; mensaje: Message }) => {
             if (payload.chatId === chatId) {
                 setChat((prev) => {
                     if (!prev) return prev;
@@ -318,9 +318,9 @@ function ConversationPanel({
                     return { ...prev, mensajes: [...prev.mensajes, payload.mensaje] };
                 });
             }
-        });
+        };
 
-        socket.on(SOCKET_EVENTS.MENSAJE_ESTADO, (payload: { chatId: string; mensajeId: string; estado: string }) => {
+        const handleMensajeEstado = (payload: { chatId: string; mensajeId: string; estado: string }) => {
             if (payload.chatId === chatId) {
                 setChat((prev) => {
                     if (!prev) return prev;
@@ -332,12 +332,26 @@ function ConversationPanel({
                     };
                 });
             }
-        });
+        };
+
+        const handleEstadoCambiado = (payload: { chatId: string; estado: string }) => {
+            if (payload.chatId === chatId) {
+                setChat((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, estado: payload.estado as any };
+                });
+            }
+        };
+
+        socket.on(SOCKET_EVENTS.NUEVO_MENSAJE, handleNuevoMensaje);
+        socket.on(SOCKET_EVENTS.MENSAJE_ESTADO, handleMensajeEstado);
+        socket.on(SOCKET_EVENTS.ESTADO_CAMBIADO, handleEstadoCambiado);
 
         return () => {
             socket.emit(CLIENT_EVENTS.LEAVE_CHAT, chatId);
-            socket.off(SOCKET_EVENTS.NUEVO_MENSAJE);
-            socket.off(SOCKET_EVENTS.MENSAJE_ESTADO);
+            socket.off(SOCKET_EVENTS.NUEVO_MENSAJE, handleNuevoMensaje);
+            socket.off(SOCKET_EVENTS.MENSAJE_ESTADO, handleMensajeEstado);
+            socket.off(SOCKET_EVENTS.ESTADO_CAMBIADO, handleEstadoCambiado);
         };
     }, [chatId, loadChat]);
 
@@ -693,7 +707,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
         socket.emit(CLIENT_EVENTS.JOIN_LINEA, roomId);
 
         // Nuevo mensaje en cualquier chat → actualizar ultimoMensaje de ese chat
-        socket.on(SOCKET_EVENTS.NUEVO_MENSAJE, (payload: { chatId: string; mensaje: Message }) => {
+        const handleNuevoMensajeList = (payload: { chatId: string; mensaje: Message }) => {
             setChats((prev) =>
                 prev.map((c) =>
                     c._id === payload.chatId
@@ -701,33 +715,39 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                         : c
                 )
             );
-        });
+        };
 
         // Nueva conversación → agregar al top de la lista
-        socket.on(SOCKET_EVENTS.NUEVO_CHAT, (newChat: ChatSummary) => {
+        const handleNuevoChat = (newChat: ChatSummary) => {
             setChats((prev) => [newChat, ...prev]);
-        });
+        };
 
         // Estado de un chat cambió
-        socket.on(SOCKET_EVENTS.ESTADO_CAMBIADO, (payload: { chatId: string; estado: string }) => {
+        const handleEstadoCambiadoList = (payload: { chatId: string; estado: string }) => {
+            console.log("[ChatPageClient] Recibido socket ESTADO_CAMBIADO:", payload);
             setChats((prev) =>
                 prev.map((c) =>
                     c._id === payload.chatId ? { ...c, estado: payload.estado as ChatSummary["estado"] } : c
                 )
             );
-        });
+        };
 
         // Chat eliminado → quitarlo de la lista
-        socket.on(SOCKET_EVENTS.CHAT_ELIMINADO, (payload: { chatId: string }) => {
+        const handleChatEliminado = (payload: { chatId: string }) => {
             setChats((prev) => prev.filter((c) => c._id !== payload.chatId));
             setSelectedId((prev) => (prev === payload.chatId ? null : prev));
-        });
+        };
+
+        socket.on(SOCKET_EVENTS.NUEVO_MENSAJE, handleNuevoMensajeList);
+        socket.on(SOCKET_EVENTS.NUEVO_CHAT, handleNuevoChat);
+        socket.on(SOCKET_EVENTS.ESTADO_CAMBIADO, handleEstadoCambiadoList);
+        socket.on(SOCKET_EVENTS.CHAT_ELIMINADO, handleChatEliminado);
 
         return () => {
-            socket.off(SOCKET_EVENTS.NUEVO_MENSAJE);
-            socket.off(SOCKET_EVENTS.NUEVO_CHAT);
-            socket.off(SOCKET_EVENTS.ESTADO_CAMBIADO);
-            socket.off(SOCKET_EVENTS.CHAT_ELIMINADO);
+            socket.off(SOCKET_EVENTS.NUEVO_MENSAJE, handleNuevoMensajeList);
+            socket.off(SOCKET_EVENTS.NUEVO_CHAT, handleNuevoChat);
+            socket.off(SOCKET_EVENTS.ESTADO_CAMBIADO, handleEstadoCambiadoList);
+            socket.off(SOCKET_EVENTS.CHAT_ELIMINADO, handleChatEliminado);
         };
     }, [isAdmin, user.linea]);
 

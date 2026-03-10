@@ -9,6 +9,7 @@ export interface IOperador extends Document {
     password: string;
     rol: "admin" | "operador";
     status: "en_linea" | "turno_abierto" | "ocupado" | "fuera_de_turno";
+    genero: "M" | "F";
     createdAt: Date;
     updatedAt: Date;
 }
@@ -62,6 +63,11 @@ const OperadoresSchema = new mongoose.Schema<IOperador>(
             type: String,
             enum: ["en_linea", "turno_abierto", "ocupado", "fuera_de_turno"],
             default: "fuera_de_turno",
+        },
+        genero: {
+            type: String,
+            enum: ["M", "F"],
+            default: "M",
         },
     },
     { timestamps: true }

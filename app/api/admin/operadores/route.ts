@@ -19,7 +19,7 @@ async function getHandler(req: NextRequest) {
         // admin_linea solo ve operadores de su propia línea
         const filtro = user.rol === "admin"
             ? {}
-            : { linea: new mongoose.Types.ObjectId(user.linea) };
+            : { linea: new mongoose.Types.ObjectId(user.linea), rol: { $ne: "admin" } };
 
         const operadores = await OperadoresModel.find(filtro)
             .select("-password")
@@ -45,7 +45,7 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { nombre, apellido, username, password, email, rol, linea } = body;
+        const { nombre, apellido, username, password, email, rol, linea, genero } = body;
 
         if (!nombre || !apellido || !username || !password) {
             return NextResponse.json({ ok: false, error: "Faltan campos obligatorios" }, { status: 400 });
@@ -72,6 +72,7 @@ async function postHandler(req: NextRequest) {
             username: username.toLowerCase().trim(),
             password: passwordHash,
             email: email?.toLowerCase().trim() || undefined,
+            genero: genero === "F" ? "F" : "M",
             rol: rolFinal,
             linea: new mongoose.Types.ObjectId(lineaFinal),
         });

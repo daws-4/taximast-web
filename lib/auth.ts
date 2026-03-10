@@ -13,6 +13,7 @@ export interface JWTPayload {
     nombre: string;
     rol: "admin" | "operador" | "admin_linea";
     linea: string;
+    genero: "M" | "F";
 }
 
 /**

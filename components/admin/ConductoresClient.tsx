@@ -117,6 +117,7 @@ export default function ConductoresClient({ user }: Props) {
             if (fFoto) {
                 const formData = new FormData();
                 formData.append("foto", fFoto);
+                formData.append("telefono", fTelefono.trim());
                 const uploadRes = await fetch("/api/admin/conductores/upload", {
                     method: "POST",
                     body: formData,

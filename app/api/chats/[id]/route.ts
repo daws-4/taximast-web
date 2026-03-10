@@ -66,11 +66,15 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         await chat.save();
 
         // Emitir evento Socket.io
-        if (global.io) {
-            global.io.to(`linea:${lineaId}`).to('linea:admin').emit("chat:estado_cambiado", {
+        const io = (global as any).io;
+        if (io) {
+            console.log(`[PATCH /api/chats/${id}] Emitiendo chat:estado_cambiado a linea:${lineaId} y linea:admin`);
+            io.to(`linea:${lineaId}`).to('linea:admin').emit("chat:estado_cambiado", {
                 chatId: id,
                 estado: chat.estado,
             });
+        } else {
+            console.log(`[PATCH /api/chats/${id}] WARNING: global.io NO ESTA DEFINIDO`);
         }
 
         return NextResponse.json({ ok: true, data: { _id: chat._id, estado: chat.estado } });

@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
             nombre: operador.nombre,
             rol: operador.rol,
             linea: operador.linea.toString(),
+            genero: operador.genero || "M",
         });
 
         // Respuesta con cookie HttpOnly

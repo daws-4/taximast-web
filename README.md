@@ -28,15 +28,12 @@ Debido a que la API oficial de WhatsApp Business está orientada al manejo de me
 
 ## 🗃️ Estructura de la Base de Datos (Modelos)
 
-Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
-
 | Modelo | Descripción |
 |---|---|
 | `Lineas` | Configuración de cada empresa/línea de taxis (credenciales WhatsApp, tokens de Meta, API Key y prompt de Gemini) |
 | `Operadores` | Usuarios del sistema con roles (`admin`, `operador`, `admin_linea`) y estado de turno |
+| `Conductores` | Registro de conductores por línea con datos de contacto, unidad y foto de identificación |
 | `Chats` | Conversaciones con mensajes embebidos, estado del ciclo de vida (`pendiente` → `bot_atendiendo` → `esperando_operador` → `en_atencion` → `cerrado`) |
-
-> 📌 Modelos planificados pero aún no creados: `Unidades`, `Conductores` (ver sección Pendientes).
 
 ---
 
@@ -44,126 +41,83 @@ Colecciones en MongoDB definidas mediante esquemas Mongoose en `/models`:
 
 | Rol | Acceso |
 |---|---|
-| `admin` | Panel completo: todas las líneas, todos los chats, estadísticas globales, gestión de operadores y líneas |
-| `admin_linea` | Panel de su línea: chats de su línea, estadísticas de su línea, gestión de operadores de su línea |
+| `admin` | Panel completo: todas las líneas, todos los chats, estadísticas globales, gestión de operadores, líneas y conductores |
+| `admin_linea` | Panel de su línea: chats de su línea, estadísticas de su línea, gestión de operadores y conductores de su línea |
 | `operador` | Solo chats de su línea asignada |
 
 ---
 
-## 🗺️ Arquitectura de Rutas
+## 🗺️ Arquitectura de Rutas Princpales
 
 ```
 /login                       → Todos los roles (público)
 /dashboard                   → Todos los roles autenticados
 /chat                        → Todos los roles (lista de chats + panel activo)
-/chat/[numero]               → Chat individual con un contacto
 
 /admin/operadores            → admin + admin_linea
 /admin/lineas                → Solo admin
+/admin/conductores           → admin + admin_linea
 /admin/estadisticas          → Solo admin (global) / admin_linea (su línea)
+
+/api/whatsapp/dispatch       → Endpoint para despacho desde TaxiMast Desktop
+/api/whatsapp/dispatch-bulk  → Endpoint para avisos masivos desde Desktop
 ```
 
 ---
 
-## ✅ Estado del Desarrollo
+## ✅ Estado del Desarrollo (Marzo 2026)
 
 ### Completado
-#### Vistas 🖥️
+#### Vistas y Frontend 🖥️
 | Vista | Rol | Estado |
-|------------------------------------------------|------------------------|---------------|
-| Módulo de Chat Integral (`/chat` & `/[numero]`) | Todos -----------------| ✅ Completado |
-| Panel admin — líneas (`/admin/lineas`) --------| `admin` ---------------| ✅ Completado |
-| Panel admin — operadores (`/admin/operadores`) | `admin`, `admin_linea` | ✅ Completado |
-| Estadísticas globales (`/admin/estadisticas`) | `admin` ----------------| ✅ Completado |
-| Módulo | Descripción |
-|---|---|
-| **Landing Page** (`/`) | Página promocional del ecosistema TAXIMAST con tema oscuro institucional |
-| **Login** (`/login`) | Página de inicio de sesión con validación, manejo de errores y redirección |
-| **Auth JWT** | Generación, verificación y expiración (24h) de tokens JWT con cookie HttpOnly |
-| **Middleware de rutas** (`proxy.ts`) | Protección de rutas por autenticación y rol; redirección automática según permisos |
-| **Dashboard base** (`/dashboard`) | Vista de bienvenida base (en proceso de integración de datos) |
-| **API Auth** | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
-| **API WhatsApp** | Recepción básica y envío (estructura base en API route) |
-| **Modelos Mongoose** | `Lineas`, `Operadores`, `Mensajes`, `Chats` con índices optimizados |
-| **Control de acceso por rol** | 3 roles en `JWTPayload` y `proxy.ts`: `admin`, `operador`, `admin_linea` |
+|---|---|---|
+| **Módulo de Chat Real-time** | Todos | ✅ Completado |
+| **Panel de Líneas** | `admin` | ✅ Completado |
+| **Panel de Operadores** | `admin`, `admin_linea` | ✅ Completado |
+| **Panel de Conductores** | `admin`, `admin_linea` | ✅ Completado |
+| **Estadísticas Dinámicas** | `admin`, `admin_linea` | ✅ Completado |
+| **Gestión de Multimedia** | Operadores | ✅ Completado |
 
----
-
-#### Integración de Inteligencia Artificial 🤖
+#### Integración de IA y Lógica 🤖
 | Tarea | Estado | Descripción |
 |---|---|---|
-| **Integración Directa de Google Gemini** | ✅ Completado | SDK de Gemini 2.5 Flash integrado en el backend para respuestas automáticas al cliente. |
-| **Gestión de API Keys por Línea** | ✅ Completado | Cada línea puede tener su propia API Key de Gemini (facturación independiente). |
-| **Ciclo de vida de estados del chat** | ✅ Completado | 5 estados: `pendiente` → `bot_atendiendo` → `esperando_operador` → `en_atencion` → `cerrado`, con transiciones automáticas y reapertura de chats cerrados. |
-| **Separación de pensamiento de la IA** | ✅ Completado | El razonamiento interno (chain-of-thought) de Gemini se guarda para los operadores pero NUNCA se envía al cliente. |
-| **Clasificación de solicitudes** | ✅ Completado | La IA clasifica automáticamente entre: traslado, objeto perdido, queja/sugerencia, y actúa en consecuencia. |
-| **Handoff automático IA → Operador** | ✅ Completado | Detección interna con etiqueta `[LISTO]` para cambiar automáticamente a `esperando_operador`. |
+| **Interacción con Gemini** | ✅ Completado | Ciclo de vida completo, clasificación de intención y handoff automático. |
+| **Filtro de Líneas Inactivas** | ✅ Completado | El webhook ignora mensajes de líneas marcadas como inactivas en el panel. |
+| **Normalización de Teléfonos** | ✅ Completado | Manejo inteligente de prefijos (58/0) para compatilidad FoxPro vs WhatsApp Cloud API. |
 
-#### Comunicaciones y Chat 💬
-| Tarea | Estado / Prioridad | Descripción |
-|---|---|---|
-| **Estados de Mensajes** | ✅ Completado | Estados visuales: Enviado, Entregado, Leído, Pendiente, Fallido. |
-| **Multimedia (Imágenes y Stickers)** | ✅ Completado | Envío y recepción de imágenes, stickers, audio, video y documentos. |
-| **Filtros y Búsqueda** | ✅ Completado | Búsqueda por nombre/teléfono y filtro por estado del chat. |
-| **Llamadas de WhatsApp** | ❌ Pendiente (BAJA) | Registrar o manejar avisos de llamadas entrantes por WhatsApp. |
-
-#### Módulo de Conductores 🚕 (PENDIENTE)
+#### Integración Desktop (TaxiMast) 🚀
 | Tarea | Estado | Descripción |
 |---|---|---|
-| **Modelo `Conductores`** | ❌ Pendiente | Colección con datos del conductor: nombre, cédula, teléfono, unidad, foto de identificación. |
-| **API CRUD** | ❌ Pendiente | Endpoints para crear, listar, editar y eliminar conductores. Upload de foto. |
-| **Admin UI** | ❌ Pendiente | Panel admin con tabla, modal de creación/edición y upload de imagen. |
-| **Separación de chats** | ❌ Pendiente | Diferenciar chats de clientes vs conductores en el sidebar. Los chats de conductores NO activan la IA. |
-| **Envío de servicios** | ❌ Pendiente | Permitir al operador enviar datos de un servicio (pasajero, origen, destino) al conductor asignado. |
+| **API de Despacho** | ✅ Completado | Nuevo endpoint `/api/whatsapp/dispatch` diseñado para el payload de FoxPro. |
+| **Integración PocketBase** | ✅ Completado | Almacenamiento seguro de fotos de conductores en servidor externo PocketBase. |
+| **Envío de Fotos de Chófer** | ✅ Completado | Envío automático de la foto del chófer al cliente cuando se despacha la unidad. |
+| **Status con Validación** | ✅ Completado | Endpoint `/api/whatsapp/status` que valida la existencia y estado de la línea. |
 
-#### Infraestructura
-| Tarea | Estado |
+---
+
+## ⚙️ Configuración del Entorno (`.env`)
+
+| Variable | Descripción |
 |---|---|
-| Servidor Socket.io para mensajes en tiempo real | ✅ Completado |
-| Integración del webhook de WhatsApp con Socket.io (push a clientes conectados) | ✅ Completado |
-| Lógica de líneas sin IA (status directo a `esperando_operador`) | ✅ Completado |
-| Modelo `Conductores` | ❌ Pendiente |
-| Modelo `Unidades` | ❌ Pendiente |
+| `MONGODB_URI` | URI de conexión a la base de datos |
+| `JWT_SECRET` | Secreto para tokens de sesión |
+| `WHATSAPP_VERIFY_TOKEN` | Token de verificación para Webhooks de Meta |
+| `NEXT_PUBLIC_PB_URL` | URL de la instancia de PocketBase (fotos) |
+| `PB_ADMIN_EMAIL` | Email administrador de PocketBase |
+| `PB_ADMIN_PASS` | Password administrador de PocketBase |
 
 ---
 
-## ⚙️ Desarrollo y Ejecución Local
+## 🎨 Diseño Visual
 
-1. Clonar el repositorio.
-2. Instalar dependencias:
-   ```bash
-   npm install
-   ```
-3. Configurar las variables de entorno (`.env`):
-
-   | Variable | Descripción |
-   |---|---|
-   | `MONGODB_URI` | URI de conexión a MongoDB |
-   | `JWT_SECRET` | Clave secreta para firma de tokens |
-   | `WA_PHONE_NUMBER_ID` | Phone Number ID de Meta for Developers |
-   | `WA_ACCESS_TOKEN` | System User Token de WhatsApp Business API |
-   | `WA_VERIFY_TOKEN` | Token de verificación para el webhook de Meta |
-   | `GEMINI_API_KEY` | (Próximamente) Clave maestra para IA en caso de fallback |
-
-4. Iniciar el entorno de desarrollo:
-   ```bash
-   npm run dev
-   ```
-
-El servidor correrá en `http://localhost:3000`.
-
----
-
-## 🎨 Paleta de Colores
+El sistema utiliza un diseño **Premium Dark Mode** con acentos en oro brillante:
 
 ```css
 --onyx:        #0b0c0c   /* Fondo principal */
---jet-black:   #2a2e34   /* Fondo de tarjetas */
---platinum:    #e9eaec   /* Texto principal */
---bright-gold: #fbe134   /* Acento primario */
---saffron:     #e4b61a   /* Acento secundario */
+--jet-black:   #2a2e34   /* Tarjetas y Modales */
+--bright-gold: #fbe134   /* Botones y Títulos */
 ```
 
 ---
 
-📝 *Última actualización: Marzo 2026 — Ciclo de vida del chat con IA, handoff automático, módulo de Conductores planificado.*
+📝 *Última actualización: 9 de Marzo de 2026 — Despacho con fotos integrado (PocketBase), Módulo de Conductores y Filtro de Líneas activas.*

@@ -422,6 +422,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
     // ── Fetch stats ────────────────────────────────────────────────────────────
     const fetchStats = useCallback(async () => {
+        if (user.rol === "operador") return; // Operadores normales no pueden ver estas estadísticas
         const endpoint = user.rol === "admin" ? "/api/estadisticas/global" : "/api/estadisticas/linea";
         try {
             const res = await fetch(endpoint);
@@ -467,7 +468,10 @@ export default function DashboardClient({ user }: DashboardClientProps) {
     }
 
     const initials = user.nombre.charAt(0).toUpperCase();
-    const rolLabel = { admin: "Administrador", admin_linea: "Admin de Línea", operador: "Operador" }[user.rol] ?? "—";
+    let rolLabel = "—";
+    if (user.rol === "admin") rolLabel = user.genero === "F" ? "Administradora" : "Administrador";
+    else if (user.rol === "admin_linea") rolLabel = "Admin de Línea";
+    else if (user.rol === "operador") rolLabel = user.genero === "F" ? "Operadora" : "Operador";
 
     return (
         <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(135deg, ${C.onyx} 0%, ${C.jetBlack} 100%)` }}>
@@ -507,22 +511,24 @@ export default function DashboardClient({ user }: DashboardClientProps) {
 
                 {/* Saludo */}
                 <div className="mb-8">
-                    <h1 className="text-2xl font-bold" style={{ color: C.platinum }}>Bienvenido, {user.nombre} 👋</h1>
+                    <h1 className="text-2xl font-bold" style={{ color: C.platinum }}>{user.genero === "F" ? "Bienvenida" : "Bienvenido"}, {user.nombre} 👋</h1>
                     <p className="text-sm mt-1" style={{ color: `${C.platinum}66` }}>
                         {user.rol === "admin" ? "Vista global — todas las líneas" : "Resumen de tu línea"}
                     </p>
                 </div>
 
                 {/* ── Estadísticas ─────────────────────────────────────────── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <StatCard label="Chats activos" value={stats.chatsActivos} sub="Hoy" icon={<ChatIcon />} />
-                    <StatCard label="Mensajes hoy" value={stats.mensajesHoy} sub="Últimas 24 h" icon={<MessageIcon />} />
-                    <StatCard label="Operadores en turno" value={stats.operadoresEnLinea} sub="Activos ahora" icon={<UserIcon />} />
-                    {user.rol === "admin"
-                        ? <StatCard label="Líneas activas" value={stats.lineasActivas ?? -1} sub="Integradas" icon={<LineIcon />} />
-                        : <StatCard label="Mensajes del mes" value={stats.mensajesMes ?? -1} sub="Acumulado" icon={<LineIcon />} />
-                    }
-                </div>
+                {user.rol !== "operador" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <StatCard label="Chats activos" value={stats.chatsActivos} sub="Hoy" icon={<ChatIcon />} />
+                        <StatCard label="Mensajes hoy" value={stats.mensajesHoy} sub="Últimas 24 h" icon={<MessageIcon />} />
+                        <StatCard label="Operadores en turno" value={stats.operadoresEnLinea} sub="Activos ahora" icon={<UserIcon />} />
+                        {user.rol === "admin"
+                            ? <StatCard label="Líneas activas" value={stats.lineasActivas ?? -1} sub="Integradas" icon={<LineIcon />} />
+                            : <StatCard label="Mensajes del mes" value={stats.mensajesMes ?? -1} sub="Acumulado" icon={<LineIcon />} />
+                        }
+                    </div>
+                )}
 
                 {/* ── Panel inferior ───────────────────────────────────────── */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
