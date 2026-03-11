@@ -12,9 +12,5 @@ export default async function ConductoresPage() {
         redirect("/login");
     }
 
-    if (user.rol !== "admin" && user.rol !== "admin_linea") {
-        redirect("/dashboard");
-    }
-
     return <ConductoresClient user={user} />;
 }

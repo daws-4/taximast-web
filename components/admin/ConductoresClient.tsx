@@ -40,6 +40,9 @@ export default function ConductoresClient({ user }: Props) {
     const [editConductor, setEditConductor] = useState<Conductor | null>(null);
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+    const isReadOnly = user.rol === "operador";
 
     // Form fields
     const [fNombre, setFNombre] = useState("");
@@ -99,11 +102,63 @@ export default function ConductoresClient({ user }: Props) {
         setModalOpen(true);
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Comprimir imagen client-side para no exceder el límite de PocketBase (5MB)
+    const compressImage = async (file: File, maxSizeMB = 4.5, maxDim = 1600): Promise<File> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                let { width, height } = img;
+
+                // Redimensionar si excede maxDim
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d")!;
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Reducir calidad progresivamente hasta estar bajo el límite
+                let quality = 0.85;
+                const tryCompress = () => {
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) { resolve(file); return; }
+                            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
+                                quality -= 0.1;
+                                tryCompress();
+                            } else {
+                                const compressed = new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+                                    type: "image/jpeg",
+                                });
+                                resolve(compressed);
+                            }
+                        },
+                        "image/jpeg",
+                        quality
+                    );
+                };
+                tryCompress();
+            };
+            img.onerror = () => resolve(file); // fallback al original si falla
+            img.src = URL.createObjectURL(file);
+        });
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setFFoto(file);
-            setFFotoPreview(URL.createObjectURL(file));
+            const compressed = await compressImage(file);
+            setFFoto(compressed);
+            setFFotoPreview(URL.createObjectURL(compressed));
         }
     };
 
@@ -195,13 +250,15 @@ export default function ConductoresClient({ user }: Props) {
                         Gestiona los conductores registrados en tus líneas
                     </p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105 cursor-pointer"
-                    style={{ backgroundColor: C.brightGold, color: C.onyx }}
-                >
-                    + Nuevo Conductor
-                </button>
+                {!isReadOnly && (
+                    <button
+                        onClick={openCreate}
+                        className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105 cursor-pointer"
+                        style={{ backgroundColor: C.brightGold, color: C.onyx }}
+                    >
+                        + Nuevo Conductor
+                    </button>
+                )}
             </div>
 
             {/* Search */}
@@ -244,7 +301,9 @@ export default function ConductoresClient({ user }: Props) {
                                     <th className="text-left px-4 py-3 font-semibold hidden lg:table-cell" style={{ color: `${C.platinum}88` }}>Línea</th>
                                 )}
                                 <th className="text-left px-4 py-3 font-semibold" style={{ color: `${C.platinum}88` }}>Estado</th>
-                                <th className="text-right px-4 py-3 font-semibold" style={{ color: `${C.platinum}88` }}>Acciones</th>
+                                {!isReadOnly && (
+                                    <th className="text-right px-4 py-3 font-semibold" style={{ color: `${C.platinum}88` }}>Acciones</th>
+                                )}
                             </tr>
                         </thead>
                         <tbody>
@@ -260,8 +319,9 @@ export default function ConductoresClient({ user }: Props) {
                                             <img
                                                 src={c.foto_identificacion}
                                                 alt={c.nombre}
-                                                className="w-10 h-10 rounded-lg object-cover border"
+                                                className="w-10 h-10 rounded-lg object-cover border cursor-pointer hover:opacity-80 transition-opacity"
                                                 style={{ borderColor: `${C.platinum}15` }}
+                                                onClick={() => setLightboxUrl(c.foto_identificacion!)}
                                             />
                                         ) : (
                                             <div
@@ -280,35 +340,49 @@ export default function ConductoresClient({ user }: Props) {
                                         <td className="px-4 py-3 hidden lg:table-cell" style={{ color: `${C.platinum}66` }}>{c.linea?.name || "—"}</td>
                                     )}
                                     <td className="px-4 py-3">
-                                        <button
-                                            onClick={() => handleToggleActive(c)}
-                                            className="text-xs px-2 py-1 rounded-full font-medium cursor-pointer transition-opacity hover:opacity-80"
-                                            style={{
-                                                backgroundColor: c.activo ? "#4ade8022" : "#ef444422",
-                                                color: c.activo ? "#4ade80" : "#ef4444",
-                                            }}
-                                        >
-                                            {c.activo ? "Activo" : "Inactivo"}
-                                        </button>
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                onClick={() => openEdit(c)}
-                                                className="text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors hover:bg-white/5"
-                                                style={{ color: C.brightGold }}
+                                        {isReadOnly ? (
+                                            <span
+                                                className="text-xs px-2 py-1 rounded-full font-medium"
+                                                style={{
+                                                    backgroundColor: c.activo ? "#4ade8022" : "#ef444422",
+                                                    color: c.activo ? "#4ade80" : "#ef4444",
+                                                }}
                                             >
-                                                Editar
-                                            </button>
+                                                {c.activo ? "Activo" : "Inactivo"}
+                                            </span>
+                                        ) : (
                                             <button
-                                                onClick={() => handleDelete(c._id)}
-                                                className="text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors hover:bg-red-500/10"
-                                                style={{ color: "#ef4444" }}
+                                                onClick={() => handleToggleActive(c)}
+                                                className="text-xs px-2 py-1 rounded-full font-medium cursor-pointer transition-opacity hover:opacity-80"
+                                                style={{
+                                                    backgroundColor: c.activo ? "#4ade8022" : "#ef444422",
+                                                    color: c.activo ? "#4ade80" : "#ef4444",
+                                                }}
                                             >
-                                                Eliminar
+                                                {c.activo ? "Activo" : "Inactivo"}
                                             </button>
-                                        </div>
+                                        )}
                                     </td>
+                                    {!isReadOnly && (
+                                        <td className="px-4 py-3 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => openEdit(c)}
+                                                    className="text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors hover:bg-white/5"
+                                                    style={{ color: C.brightGold }}
+                                                >
+                                                    Editar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(c._id)}
+                                                    className="text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors hover:bg-red-500/10"
+                                                    style={{ color: "#ef4444" }}
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -339,8 +413,9 @@ export default function ConductoresClient({ user }: Props) {
                                         <img
                                             src={fFotoPreview}
                                             alt="Preview"
-                                            className="w-20 h-20 rounded-xl object-cover border"
+                                            className="w-20 h-20 rounded-xl object-cover border cursor-pointer hover:opacity-80 transition-opacity"
                                             style={{ borderColor: `${C.platinum}15` }}
+                                            onClick={() => setLightboxUrl(fFotoPreview)}
                                         />
                                     ) : (
                                         <div
@@ -478,6 +553,30 @@ export default function ConductoresClient({ user }: Props) {
                                 {saving ? "Guardando..." : editConductor ? "Guardar cambios" : "Crear conductor"}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Lightbox para expandir fotos */}
+            {lightboxUrl && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md cursor-pointer"
+                    onClick={() => setLightboxUrl(null)}
+                >
+                    <div className="relative max-w-[90vw] max-h-[90vh]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={lightboxUrl}
+                            alt="Foto de identificación"
+                            className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+                        />
+                        <button
+                            onClick={() => setLightboxUrl(null)}
+                            className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold cursor-pointer transition-transform hover:scale-110"
+                            style={{ backgroundColor: C.jetBlack, color: C.platinum, border: `1px solid ${C.platinum}22` }}
+                        >
+                            ✕
+                        </button>
                     </div>
                 </div>
             )}

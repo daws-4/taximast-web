@@ -8,14 +8,11 @@ import mongoose from "mongoose";
 async function getHandler(req: NextRequest) {
     const user = getUserFromRequest(req);
     if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
-    if (user.rol !== "admin" && user.rol !== "admin_linea") {
-        return NextResponse.json({ ok: false, error: "Sin permisos" }, { status: 403 });
-    }
 
     try {
         await connectDB();
 
-        // admin_linea solo ve conductores de su propia línea
+        // admin ve todos; admin_linea y operador solo ven su línea
         const filtro = user.rol === "admin"
             ? {}
             : { linea: new mongoose.Types.ObjectId(user.linea) };
@@ -43,7 +40,7 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { nombre, cedula, telefono, unidad, notas, linea } = body;
+        const { nombre, cedula, telefono, unidad, notas, linea, foto_identificacion } = body;
 
         if (!nombre || !telefono) {
             return NextResponse.json({ ok: false, error: "Nombre y teléfono son obligatorios" }, { status: 400 });
@@ -62,6 +59,7 @@ async function postHandler(req: NextRequest) {
             telefono: telefono.trim(),
             unidad: unidad?.trim() || undefined,
             notas: notas?.trim() || undefined,
+            foto_identificacion: foto_identificacion || undefined,
             linea: new mongoose.Types.ObjectId(lineaFinal),
         });
 

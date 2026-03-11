@@ -16,6 +16,7 @@ async function getHandler(req: NextRequest, { params }: { params: Promise<{ id: 
         const chat = await ChatsModel.findById(id)
             .populate("linea", "name")
             .populate("operador", "nombre apellido")
+            .populate("conductor", "nombre telefono unidad foto_identificacion")
             .lean();
 
         if (!chat) return NextResponse.json({ ok: false, error: "Chat no encontrado" }, { status: 404 });
@@ -25,6 +26,17 @@ async function getHandler(req: NextRequest, { params }: { params: Promise<{ id: 
 
         if (user.rol !== "admin" && lineaId !== user.linea) {
             return NextResponse.json({ ok: false, error: "Sin permisos" }, { status: 403 });
+        }
+
+        // Inyectar foto del conductor SOLO en mensajes de despacho de FoxPro (contienen "CHOFER:")
+        const conductorAny = chat.conductor as any;
+        if (conductorAny?.foto_identificacion && chat.mensajes?.length) {
+            for (const msg of chat.mensajes) {
+                if (msg.origen === "sistema" && /CHOFER:/i.test(msg.texto || '') && !msg.media_url) {
+                    msg.tipo = "image";
+                    msg.media_url = conductorAny.foto_identificacion;
+                }
+            }
         }
 
         return NextResponse.json({ ok: true, data: chat });

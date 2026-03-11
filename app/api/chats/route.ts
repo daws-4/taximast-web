@@ -40,9 +40,10 @@ async function getHandler(req: NextRequest) {
 
     try {
         const chats = await ChatsModel.find(filtro)
-            .select("linea operador cliente_phone cliente_nombre estado ultimoMensaje createdAt")
+            .select("linea operador cliente_phone cliente_nombre estado ultimoMensaje createdAt tipo_chat conductor")
             .populate("linea", "name")
             .populate("operador", "nombre apellido")
+            .populate("conductor", "nombre telefono unidad foto_identificacion")
             .sort({ ultimoMensaje: -1 })
             .limit(100)
             .lean();

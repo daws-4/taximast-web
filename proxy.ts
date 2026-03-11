@@ -5,8 +5,11 @@ import { verifyToken } from "@/lib/auth";
 const PUBLIC_ROUTES = [
     "/login",
     "/api/auth/login",
-    "/api/whatsapp/webhook" // El webhook no usa JWT, usa verificación de firma HMAC
+    "/api/whatsapp/webhook" // El webhook usa verificación de firma HMAC, no API key
 ];
+
+// Rutas de WhatsApp que requieren API Key (no JWT)
+const WA_API_ROUTES = "/api/whatsapp";
 
 // Rutas exclusivas del admin global (gestión de todas las líneas)
 const ADMIN_GLOBAL_ROUTES = [
@@ -32,6 +35,26 @@ export function proxy(req: NextRequest) {
         if (payload) {
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
+    }
+
+    // ── Rutas de WhatsApp API: autenticación por API Key ──
+    if (pathname.startsWith(WA_API_ROUTES) && !pathname.startsWith("/api/whatsapp/webhook")) {
+        const authHeader = req.headers.get("authorization");
+        const waApiKey = process.env.WA_API_KEY;
+
+        if (!waApiKey) {
+            // Si no hay API key configurada en el servidor, permitir (desarrollo)
+            return NextResponse.next();
+        }
+
+        if (!authHeader || authHeader !== `Bearer ${waApiKey}`) {
+            return NextResponse.json(
+                { error: "API key inválida o faltante", connected: false },
+                { status: 401 }
+            );
+        }
+
+        return NextResponse.next();
     }
 
     // Permitir rutas públicas y assets de Next.js

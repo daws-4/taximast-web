@@ -24,7 +24,7 @@ async function getAdminToken(): Promise<string | null> {
     if (adminToken && Date.now() < tokenExpiry) return adminToken;
 
     try {
-        const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+        const res = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ identity: PB_EMAIL, password: PB_PASS }),

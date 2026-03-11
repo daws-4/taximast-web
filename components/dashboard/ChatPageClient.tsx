@@ -23,6 +23,14 @@ interface ChatSummary {
     cliente_nombre?: string;
     estado: "pendiente" | "bot_atendiendo" | "esperando_operador" | "en_atencion" | "cerrado";
     ultimoMensaje: string;
+    tipo_chat?: "cliente" | "conductor";
+    conductor?: {
+        _id: string;
+        nombre: string;
+        telefono: string;
+        unidad?: string;
+        foto_identificacion?: string;
+    };
 }
 
 interface Message {
@@ -94,7 +102,9 @@ function ChatListItem({
     onClick: () => void;
     showLinea: boolean;
 }) {
-    const displayName = chat.cliente_nombre || chat.cliente_phone;
+    const displayName = chat.tipo_chat === "conductor" && chat.conductor?.nombre
+        ? chat.conductor.nombre
+        : (chat.cliente_nombre || chat.cliente_phone);
     return (
         <button
             onClick={onClick}
@@ -107,10 +117,11 @@ function ChatListItem({
         >
             <div className="flex items-center justify-between gap-2">
                 <span
-                    className="text-sm font-semibold truncate max-w-[140px]"
+                    className="text-sm font-semibold truncate max-w-[140px] flex items-center gap-1.5"
                     style={{ color: selected ? C.brightGold : C.platinum }}
                 >
-                    {displayName}
+                    {chat.tipo_chat === "conductor" && <span className="text-xs shrink-0" title="Chófer">🚕</span>}
+                    <span className="truncate">{displayName}</span>
                 </span>
                 <span className="text-xs shrink-0" style={{ color: `${C.platinum}44` }}>
                     {formatDate(chat.ultimoMensaje)}
@@ -181,6 +192,8 @@ function MessageBubble({ msg }: { msg: Message }) {
 
     // Mensajes de la IA (sistema) — se muestran como burbujas de chat completas
     if (isSistema) {
+        const isSystemMedia = ["image", "video", "audio", "document", "location", "sticker", "voice"].includes(msg.tipo ?? "");
+        
         return (
             <div className="flex justify-end mb-1 group">
                 <div
@@ -198,6 +211,20 @@ function MessageBubble({ msg }: { msg: Message }) {
                             Asistente IA
                         </span>
                     </div>
+
+                    {isSystemMedia && (
+                        <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : 'bg-black/20 min-h-[120px] min-w-[120px]'}`}>
+                            {msg.tipo === "image" || msg.tipo === "sticker" ? (
+                                msg.media_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={msg.media_url} alt={msg.tipo} className={`max-w-full max-h-[300px] object-contain ${msg.tipo === 'sticker' ? 'bg-transparent' : 'rounded-lg'}`} />
+                                ) : (
+                                    <span className="text-xl">{msg.tipo === 'sticker' ? '👽' : '📷'}</span>
+                                )
+                            ) : null}
+                        </div>
+                    )}
+
                     <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.texto}</p>
                     <div className="flex items-center justify-end gap-1.5 mt-1">
                         <p className="text-[10px]" style={{ color: "#60a5fa55" }}>
@@ -456,21 +483,38 @@ function ConversationPanel({
                     >
                         ←
                     </button>
-                    <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                        style={{ backgroundColor: `${C.brightGold}22`, color: C.brightGold }}
-                    >
-                        {(chat.cliente_nombre || chat.cliente_phone).charAt(0).toUpperCase()}
-                    </div>
+                    {chat.tipo_chat === "conductor" && chat.conductor?.foto_identificacion ? (
+                        <div className="w-9 h-9 rounded-full overflow-hidden border shrink-0" style={{ borderColor: `${C.brightGold}44` }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={chat.conductor.foto_identificacion} alt={chat.conductor.nombre} className="w-full h-full object-cover" />
+                        </div>
+                    ) : (
+                        <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                            style={{ backgroundColor: `${C.brightGold}22`, color: C.brightGold }}
+                        >
+                            {(chat.tipo_chat === "conductor" && chat.conductor?.nombre ? chat.conductor.nombre : (chat.cliente_nombre || chat.cliente_phone)).charAt(0).toUpperCase()}
+                        </div>
+                    )}
                     <div>
-                        <p className="text-sm font-semibold" style={{ color: C.platinum }}>
-                            {chat.cliente_nombre || chat.cliente_phone}
-                        </p>
-                        {chat.cliente_nombre && (
-                            <p className="text-xs" style={{ color: `${C.platinum}55` }}>
-                                {chat.cliente_phone}
+                        <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold truncate max-w-[180px] sm:max-w-xs" style={{ color: C.platinum }}>
+                                {chat.tipo_chat === "conductor" && chat.conductor ? chat.conductor.nombre : (chat.cliente_nombre || chat.cliente_phone)}
                             </p>
-                        )}
+                            {chat.tipo_chat === "conductor" && (
+                                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded shadow-sm shrink-0 hidden sm:inline-block" style={{ backgroundColor: `${C.brightGold}22`, color: C.brightGold }}>
+                                    Chófer
+                                </span>
+                            )}
+                            {chat.tipo_chat === "conductor" && chat.conductor?.unidad && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border shadow-sm shrink-0 hidden sm:inline-block" style={{ backgroundColor: `${C.onyx}`, color: C.platinum, borderColor: `${C.platinum}22` }}>
+                                    #{chat.conductor.unidad}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs" style={{ color: `${C.platinum}55` }}>
+                            {chat.tipo_chat === "conductor" && chat.conductor ? chat.conductor.telefono : chat.cliente_phone}
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -522,8 +566,8 @@ function ConversationPanel({
                         </p>
                     </div>
                 )}
-                {chat.mensajes.map((msg) => (
-                    <MessageBubble key={msg._id} msg={msg} />
+                {chat.mensajes.map((msg, index) => (
+                    <MessageBubble key={msg._id || `msg-${index}`} msg={msg} />
                 ))}
                 <div ref={bottomRef} />
             </div>
