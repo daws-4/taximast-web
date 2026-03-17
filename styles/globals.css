@@ -17,3 +17,617 @@
     --color-bright-gold: #fbe134;
     --color-saffron: #e4b61a;
 }
+
+/* ============================
+   PAGE STYLES — page.tsx
+   ============================ */
+
+/* ── Root container ── */
+.page-root {
+  @apply min-h-screen bg-black text-white font-sans;
+  &::selection,
+  & ::selection {
+    @apply bg-yellow-400 text-black;
+  }
+}
+
+/* ── Navbar ── */
+.navbar {
+  @apply fixed top-0 w-full z-50 transition-all duration-300 bg-transparent py-6;
+}
+.navbar--scrolled {
+  @apply bg-black/90 md:bg-black/80 backdrop-blur-lg border-b border-white/10 py-3;
+}
+.navbar__inner {
+  @apply max-w-7xl mx-auto px-6 flex justify-between items-center relative;
+}
+
+/* Logo */
+.navbar__logo {
+  @apply text-2xl font-black tracking-tighter flex items-center gap-2 cursor-pointer z-10;
+}
+.navbar__logo-icon {
+  @apply w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center;
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.3);
+}
+.navbar__logo-icon svg {
+  @apply text-black fill-current;
+}
+
+/* Desktop nav links */
+.navbar__links {
+  @apply hidden lg:flex gap-6 text-[11px] uppercase tracking-widest font-black text-gray-400 absolute left-[46%] -translate-x-1/2 whitespace-nowrap;
+}
+.navbar__link {
+  @apply hover:text-yellow-400 transition-colors;
+}
+
+/* Auth buttons (desktop) */
+.navbar__auth {
+  @apply hidden md:flex items-center gap-4 z-10;
+}
+.navbar__btn-login {
+  @apply text-sm font-bold text-gray-300 hover:text-white transition-colors px-4 py-2 flex items-center gap-2;
+}
+.navbar__btn-login:hover svg {
+  @apply text-yellow-400;
+}
+.navbar__btn-login svg {
+  @apply transition-colors;
+}
+.navbar__btn-register {
+  @apply bg-yellow-400 text-black px-6 py-2.5 rounded-full text-sm font-bold hover:bg-yellow-300 transition-all active:scale-95 flex items-center gap-2;
+}
+.navbar__btn-register:hover {
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.3);
+}
+
+/* Mobile toggle */
+.navbar__mobile-toggle {
+  @apply md:hidden p-2 text-gray-400 hover:text-white z-10;
+}
+
+/* Mobile dropdown */
+.navbar__mobile-menu {
+  @apply md:hidden absolute w-full bg-black border-b border-white/10 transition-all duration-300 overflow-hidden;
+}
+.navbar__mobile-menu--open {
+  @apply max-h-[600px] py-8 opacity-100;
+}
+.navbar__mobile-menu--closed {
+  @apply max-h-0 py-0 opacity-0;
+}
+.navbar__mobile-list {
+  @apply flex flex-col items-center gap-6 px-6 text-xs font-black uppercase tracking-widest;
+}
+.navbar__mobile-link {
+  @apply py-2 hover:text-yellow-400 transition-colors;
+}
+.navbar__mobile-divider {
+  @apply w-full h-px bg-white/10 my-2;
+}
+.navbar__mobile-btn-login {
+  @apply w-full py-4 text-sm font-black border border-white/10 rounded-2xl flex items-center justify-center gap-2;
+}
+.navbar__mobile-btn-register {
+  @apply w-full py-4 text-sm font-black bg-yellow-400 text-black rounded-2xl flex items-center justify-center gap-2 shadow-lg;
+  --tw-shadow-color: rgba(250, 204, 21, 0.1);
+}
+
+/* ── Hero Section ── */
+.hero {
+  @apply relative pt-32 pb-20 md:pt-44 md:pb-28 px-6 overflow-hidden bg-black;
+}
+.hero__glow {
+  @apply absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[700px] rounded-full -z-10 animate-pulse;
+  background: rgba(250, 204, 21, 0.1);
+  filter: blur(150px);
+}
+.hero__content {
+  @apply max-w-5xl mx-auto text-center;
+}
+.hero__badge {
+  @apply inline-flex items-center gap-2 px-3 py-1 rounded-full border border-yellow-400/20 bg-yellow-400/5 text-yellow-400 text-xs font-bold uppercase tracking-widest mb-8;
+}
+.hero__badge-dot {
+  @apply relative flex h-2 w-2;
+}
+.hero__badge-dot-ping {
+  @apply animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75;
+}
+.hero__badge-dot-core {
+  @apply relative inline-flex rounded-full h-2 w-2 bg-yellow-400;
+}
+.hero__title {
+  @apply text-6xl md:text-5xl lg:text-6xl font-black tracking-tight mb-8 leading-[1.1];
+}
+.hero__title-highlight {
+  @apply text-yellow-400;
+}
+.hero__subtitle {
+  @apply text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed;
+}
+.hero__subtitle-brand {
+  @apply text-white font-bold;
+}
+.hero__subtitle-whatsapp {
+  @apply text-white font-semibold italic;
+}
+.hero__actions {
+  @apply flex flex-col sm:flex-row items-center justify-center gap-4;
+}
+.hero__btn-primary {
+  @apply w-full sm:w-auto bg-yellow-400 text-black px-10 py-5 rounded-full font-black text-lg hover:bg-yellow-300 transition-all flex items-center justify-center gap-2;
+  box-shadow: 0 10px 25px -3px rgba(250, 204, 21, 0.1);
+}
+.hero__btn-primary:hover svg {
+  @apply translate-x-1;
+}
+.hero__btn-primary svg {
+  @apply transition-transform;
+}
+.hero__btn-secondary {
+  @apply w-full sm:w-auto border border-white/10 px-10 py-5 rounded-full font-bold text-lg hover:bg-white/5 transition-all backdrop-blur-sm;
+}
+
+/* ── Nosotros Section ── */
+.about {
+  @apply py-24 px-6 border-y border-white/5;
+  background: #050505;
+}
+.about__grid {
+  @apply max-w-7xl mx-auto;
+}
+.about__columns {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-20 items-center;
+}
+.about__text {
+  @apply relative;
+}
+.about__glow {
+  @apply absolute -top-10 -left-10 w-32 h-32 rounded-full blur-3xl;
+  background: rgba(250, 204, 21, 0.1);
+}
+.about__label {
+  @apply text-yellow-400 font-black uppercase tracking-[0.3em] text-xs mb-4;
+}
+.about__title {
+  @apply text-4xl md:text-6xl font-black mb-8 tracking-tighter uppercase leading-tight;
+}
+.about__title-fade {
+  @apply text-white opacity-50;
+}
+.about__description {
+  @apply text-gray-400 leading-relaxed mb-8 text-lg font-medium;
+}
+.about__description-brand {
+  @apply text-white font-bold;
+}
+.about__cards {
+  @apply grid grid-cols-2 gap-8;
+}
+.about__card {
+  @apply p-6 bg-white/5 rounded-3xl border border-white/10 hover:border-yellow-400/50 transition-all;
+}
+.about__card-icon {
+  @apply text-yellow-400 mb-4;
+}
+.about__card-title {
+  @apply font-black text-white uppercase text-[10px] tracking-widest mb-2;
+}
+.about__card-desc {
+  @apply text-gray-500 text-sm;
+}
+
+/* About image */
+.about__image-wrapper {
+  @apply relative;
+}
+.about__image-frame {
+  @apply aspect-square rounded-[4rem] border-8 border-white/5 overflow-hidden shadow-2xl relative;
+  background: #111;
+}
+.about__image {
+  @apply w-full h-full object-cover grayscale opacity-60 transition-all duration-1000;
+}
+.about__image-wrapper:hover .about__image {
+  @apply grayscale-0 opacity-100;
+}
+.about__image-overlay {
+  @apply absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent;
+}
+.about__stat {
+  @apply absolute bottom-10 left-10;
+}
+.about__stat-number {
+  @apply text-5xl font-black text-yellow-400;
+}
+.about__stat-label {
+  @apply text-[10px] font-black uppercase tracking-[0.3em] text-white;
+}
+
+/* ── Servicios Section ── */
+.services {
+  @apply py-24 px-6 bg-black;
+}
+.services__inner {
+  @apply max-w-7xl mx-auto;
+}
+.services__header {
+  @apply text-center mb-20;
+}
+.services__label {
+  @apply text-yellow-400 font-black uppercase tracking-[0.4em] text-xs mb-4;
+}
+.services__title {
+  @apply text-4xl md:text-6xl font-black mb-6 tracking-tighter uppercase;
+}
+.services__accent {
+  @apply w-24 h-2 bg-yellow-400 mx-auto rounded-full;
+}
+.services__grid {
+  @apply flex flex-wrap justify-center gap-8;
+}
+.services__card {
+  @apply p-10 border border-white/5 rounded-[3rem] hover:border-yellow-400/50 transition-all w-full md:w-[calc(33.333%-1.5rem)];
+  background: #0b0c0c;
+}
+.services__card-icon {
+  @apply w-16 h-16 rounded-2xl flex items-center justify-center mb-8 transition-all;
+  background: rgba(250, 204, 21, 0.1);
+}
+.services__card:hover .services__card-icon {
+  @apply bg-yellow-400 text-black;
+}
+.services__card-name {
+  @apply text-xl font-black mb-4 uppercase tracking-tight;
+}
+.services__card-desc {
+  @apply text-gray-500 text-sm leading-relaxed;
+}
+
+/* ── Ecosistema Section ── */
+.ecosystem {
+  @apply py-24 px-6 text-white relative;
+  background: #0b0c0c;
+}
+.ecosystem__inner {
+  @apply max-w-7xl mx-auto;
+}
+.ecosystem__header {
+  @apply flex flex-col md:flex-row md:items-end justify-between mb-16 gap-4;
+}
+.ecosystem__label {
+  @apply text-yellow-400 font-bold uppercase tracking-[0.2em] text-xs mb-2;
+}
+.ecosystem__title {
+  @apply text-4xl md:text-5xl font-black text-white uppercase tracking-tight;
+}
+.ecosystem__subtitle {
+  @apply text-gray-400 max-w-sm text-sm italic font-medium;
+}
+.ecosystem__grid {
+  @apply grid grid-cols-1 md:grid-cols-3 gap-8;
+}
+
+/* Ecosystem cards (shared) */
+.eco-card {
+  @apply backdrop-blur-sm p-10 rounded-[3rem] transition-all duration-500 relative overflow-hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+.eco-card:hover {
+  @apply -translate-y-2;
+}
+.eco-card__icon {
+  @apply w-16 h-16 rounded-[1.5rem] flex items-center justify-center mb-10 transition-transform duration-500 shadow-inner;
+}
+.eco-card:hover .eco-card__icon {
+  @apply scale-110;
+}
+.eco-card__name {
+  @apply text-2xl font-black mb-2 text-white uppercase tracking-tighter;
+}
+.eco-card__tag {
+  @apply text-[10px] mb-6 uppercase tracking-[0.2em] font-black;
+}
+.eco-card__desc {
+  @apply text-gray-400 leading-relaxed text-sm font-medium;
+}
+
+/* Desktop card */
+.eco-card--desktop {
+  @apply border-2 border-blue-600/40 hover:border-blue-500;
+  box-shadow: 0 0 40px rgba(37, 99, 235, 0.05);
+}
+.eco-card--desktop:hover {
+  box-shadow: 0 0 60px rgba(37, 99, 235, 0.15);
+}
+.eco-card--desktop .eco-card__icon {
+  background: rgba(37, 99, 235, 0.2);
+}
+.eco-card--desktop .eco-card__tag {
+  @apply text-blue-500;
+}
+
+/* Web card */
+.eco-card--web {
+  @apply border-2 border-emerald-500/40 hover:border-emerald-400;
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.05);
+}
+.eco-card--web:hover {
+  box-shadow: 0 0 60px rgba(16, 185, 129, 0.15);
+}
+.eco-card--web .eco-card__icon {
+  background: rgba(16, 185, 129, 0.2);
+}
+.eco-card--web .eco-card__tag {
+  @apply text-emerald-500;
+}
+
+/* AI card */
+.eco-card--ai {
+  @apply border-2 border-yellow-400/50 hover:border-yellow-400;
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.05);
+}
+.eco-card--ai:hover {
+  box-shadow: 0 0 60px rgba(250, 204, 21, 0.2);
+}
+.eco-card--ai .eco-card__icon {
+  background: rgba(250, 204, 21, 0.2);
+}
+.eco-card--ai .eco-card__name {
+  @apply text-yellow-400;
+}
+.eco-card--ai .eco-card__tag {
+  @apply text-yellow-600;
+}
+.eco-card--ai .eco-card__desc {
+  @apply text-gray-300 font-semibold;
+}
+.eco-card__live-dot {
+  @apply absolute top-8 right-10;
+}
+.eco-card__live-ping {
+  @apply flex h-3 w-3;
+}
+.eco-card__live-ping-ring {
+  @apply animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75;
+}
+.eco-card__live-ping-dot {
+  @apply relative inline-flex rounded-full h-3 w-3 bg-yellow-400;
+}
+
+/* ── Beneficios Section ── */
+.benefits {
+  @apply py-24 px-6 bg-black overflow-hidden border-y border-white/5;
+}
+.benefits__inner {
+  @apply max-w-7xl mx-auto;
+}
+.benefits__header {
+  @apply text-center mb-24;
+}
+.benefits__title {
+  @apply text-5xl md:text-7xl font-black mb-6 text-white tracking-tighter uppercase;
+}
+.benefits__accent {
+  @apply w-24 h-2 bg-yellow-400 mx-auto rounded-full;
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.5);
+}
+.benefits__columns {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-20 items-center;
+}
+
+/* Benefits image */
+.benefits__image-area {
+  @apply relative flex justify-center;
+}
+.benefits__image-circle {
+  @apply relative w-80 h-80 md:w-[450px] md:h-[450px];
+}
+.benefits__image-frame {
+  @apply absolute inset-0 rounded-full border-8 border-white/5 overflow-hidden;
+  background: #111;
+  box-shadow: 0 0 80px rgba(255, 255, 255, 0.05);
+}
+.benefits__image {
+  @apply w-full h-full object-cover grayscale opacity-50 transition-all duration-1000 scale-105 hover:grayscale-0 hover:opacity-100 hover:scale-100;
+}
+.benefits__float-icon--whatsapp {
+  @apply absolute top-4 -right-2 w-16 h-16 bg-yellow-400 rounded-2xl flex items-center justify-center shadow-2xl border-4 border-black animate-bounce;
+}
+.benefits__float-icon--shield {
+  @apply absolute -bottom-4 right-1/4 w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center shadow-2xl border-4 border-black;
+}
+
+/* Benefits list */
+.benefits__list {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-10;
+}
+.benefits__item {
+  @apply flex gap-6 cursor-default;
+}
+.benefits__item-icon {
+  @apply flex-shrink-0 w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center transition-all;
+}
+.benefits__item:hover .benefits__item-icon {
+  @apply bg-yellow-400 text-black;
+}
+.benefits__item-title {
+  @apply text-xl font-black mb-2 uppercase tracking-tighter text-white;
+}
+.benefits__item-desc {
+  @apply text-gray-500 text-sm leading-relaxed font-medium;
+}
+
+/* ── Flujo Section ── */
+.flow {
+  @apply py-24 px-6 relative text-white;
+  background: #0b0c0c;
+}
+.flow__inner {
+  @apply max-w-5xl mx-auto;
+}
+.flow__header {
+  @apply text-center mb-24;
+}
+.flow__label {
+  @apply text-yellow-400 font-bold uppercase tracking-[0.3em] text-xs mb-4;
+}
+.flow__title {
+  @apply text-4xl md:text-5xl font-black mb-6 text-white tracking-tight text-center uppercase;
+}
+.flow__accent {
+  @apply w-20 h-1.5 bg-yellow-400 mx-auto rounded-full;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+}
+.flow__timeline {
+  @apply relative;
+}
+.flow__timeline-line {
+  @apply absolute top-12 left-0 w-full h-1 bg-white/5 hidden md:block;
+}
+.flow__steps {
+  @apply grid grid-cols-1 md:grid-cols-3 gap-16 relative z-10;
+}
+.flow__step {
+  @apply flex flex-col items-center text-center cursor-pointer;
+}
+.flow__step-circle {
+  @apply w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-8 border-4 border-black ring-4 ring-white/5 transition-all duration-300 font-black text-3xl text-gray-400 shadow-2xl;
+}
+.flow__step:hover .flow__step-circle {
+  @apply bg-yellow-400 text-black ring-yellow-400/50;
+}
+.flow__step-title {
+  @apply text-xl font-bold mb-3 text-white transition-colors uppercase tracking-wider;
+}
+.flow__step:hover .flow__step-title {
+  @apply text-yellow-400;
+}
+.flow__step-desc {
+  @apply text-sm text-gray-400 max-w-[200px] font-medium;
+}
+
+/* ── Atención Section ── */
+.contact {
+  @apply py-24 px-6 bg-black relative;
+}
+.contact__inner {
+  @apply max-w-4xl mx-auto;
+}
+.contact__header {
+  @apply flex flex-col md:flex-row items-center justify-between gap-8 mb-12;
+}
+.contact__header-left {
+  @apply flex items-center gap-4;
+}
+.contact__header-icon {
+  @apply w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center shadow-lg;
+  --tw-shadow-color: rgba(250, 204, 21, 0.2);
+}
+.contact__header-title {
+  @apply text-4xl md:text-5xl font-black text-white tracking-tight uppercase;
+}
+.contact__header-right {
+  @apply text-gray-500 text-[10px] max-w-xs md:text-right font-black uppercase tracking-[0.3em] leading-tight;
+}
+.contact__header-right span {
+  @apply text-white;
+}
+
+/* Contact form card */
+.contact__card {
+  @apply border border-white/10 rounded-[3rem] p-8 md:p-14 relative overflow-hidden;
+  background: #0b0c0c;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+}
+.contact__card-glow {
+  @apply absolute -top-24 -right-24 w-64 h-64 rounded-full;
+  background: rgba(250, 204, 21, 0.05);
+  filter: blur(80px);
+}
+.contact__form {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10;
+}
+.contact__field {
+  @apply flex flex-col gap-3;
+}
+.contact__field--full {
+  @apply md:col-span-2;
+}
+.contact__label {
+  @apply text-[10px] font-black text-yellow-400 uppercase tracking-widest ml-1 transition-colors;
+}
+.contact__field:focus-within .contact__label {
+  @apply text-white;
+}
+.contact__input-wrap {
+  @apply relative;
+}
+.contact__input-icon {
+  @apply absolute left-4 top-1/2 -translate-y-1/2 text-gray-600;
+}
+.contact__input {
+  @apply w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-6 py-4 text-white outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/10 transition-all font-bold;
+}
+.contact__input::placeholder {
+  @apply text-gray-700;
+}
+.contact__textarea {
+  @apply w-full bg-white/5 border border-white/10 rounded-[2rem] px-6 py-5 text-white outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/10 transition-all resize-none font-bold;
+}
+.contact__textarea::placeholder {
+  @apply text-gray-700;
+}
+.contact__submit {
+  @apply md:col-span-2 w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-lg py-5 rounded-2xl flex items-center justify-center gap-4 active:scale-95 transition-all mt-4 uppercase tracking-widest;
+  box-shadow: 0 10px 25px -3px rgba(250, 204, 21, 0.1);
+}
+.contact__submit:hover svg {
+  @apply translate-x-1 -translate-y-1;
+}
+.contact__submit svg {
+  @apply transition-transform;
+}
+
+/* ── Footer ── */
+.footer {
+  @apply py-10 px-6 bg-black border-t border-white/5;
+}
+.footer__inner {
+  @apply max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-[10px] font-black uppercase tracking-[0.25em] text-gray-500;
+}
+.footer__brand {
+  @apply flex items-center gap-4;
+}
+.footer__brand-name {
+  @apply flex items-center gap-2 text-white;
+}
+.footer__brand-name svg {
+  @apply text-yellow-400 fill-current;
+}
+.footer__brand-name span {
+  @apply tracking-tighter text-sm;
+}
+.footer__brand-divider {
+  @apply hidden md:block w-px h-3 bg-white/10;
+}
+.footer__brand-location {
+  @apply flex items-center gap-2;
+}
+.footer__brand-location svg {
+  @apply text-yellow-400;
+}
+.footer__copyright {
+  @apply text-center;
+}
+.footer__copyright-extra {
+  @apply hidden md:inline;
+}
+.footer__legal {
+  @apply flex items-center gap-6;
+}
+.footer__legal-link {
+  @apply hover:text-yellow-400 transition-colors;
+}
