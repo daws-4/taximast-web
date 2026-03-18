@@ -5,7 +5,8 @@ import { verifyToken } from "@/lib/auth";
 const PUBLIC_ROUTES = [
     "/login",
     "/api/auth/login",
-    "/api/whatsapp/webhook" // El webhook usa verificación de firma HMAC, no API key
+    "/api/whatsapp/webhook", // El webhook usa verificación de firma HMAC, no API key
+    "/api/contact"
 ];
 
 // Rutas de WhatsApp que requieren API Key (no JWT)

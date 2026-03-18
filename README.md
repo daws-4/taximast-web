@@ -121,3 +121,9 @@ El sistema utiliza un diseño **Premium Dark Mode** con acentos en oro brillante
 ---
 
 📝 *Última actualización: 9 de Marzo de 2026 — Despacho con fotos integrado (PocketBase), Módulo de Conductores y Filtro de Líneas activas.*
+
+
+## tasklis
+ 
+- [] Metricas detalladas sobre cantidad de servicios emitidos
+- [] Opción de enviar multimedia a través de la plataforma 
