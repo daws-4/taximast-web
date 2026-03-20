@@ -5,7 +5,7 @@ import {
   Monitor,
   Globe,
   Bot,
-  Zap,
+  CarTaxiFront,
   ArrowRight,
   ShieldCheck,
   CircleDollarSign,
@@ -29,6 +29,8 @@ import {
   Mail,
 } from 'lucide-react';
 
+import Image from 'next/image';
+
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -48,7 +50,7 @@ export default function Home() {
   const handleContactSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormStatus({ loading: true, success: '', error: '' });
-    
+
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
@@ -82,7 +84,7 @@ export default function Home() {
           {/* Logo */}
           <div className="navbar__logo">
             <div className="navbar__logo-icon">
-              <Zap size={20} />
+              <CarTaxiFront size={20} />
             </div>
             <span>TAXIMAST</span>
           </div>
@@ -93,14 +95,13 @@ export default function Home() {
             <a href="#servicios" className="navbar__link">Servicios</a>
             <a href="#ecosistema" className="navbar__link">Ecosistema</a>
             <a href="#beneficios" className="navbar__link">Beneficios</a>
-            <a href="#atencion" className="navbar__link">Atención</a>
           </div>
 
           {/* Botones de Auth Desktop */}
           <div className="navbar__auth">
             <button onClick={() => document.getElementById('atencion')?.scrollIntoView({ behavior: 'smooth' })} className="navbar__btn-register cursor-pointer">
-              <UserPlus size={16} />
-              Regístrate
+              <AlertCircle size={16} />
+              Más Información
             </button>
           </div>
 
@@ -120,10 +121,9 @@ export default function Home() {
             <a href="#servicios" onClick={() => setMobileMenuOpen(false)} className="navbar__mobile-link">Servicios</a>
             <a href="#ecosistema" onClick={() => setMobileMenuOpen(false)} className="navbar__mobile-link">Ecosistema</a>
             <a href="#beneficios" onClick={() => setMobileMenuOpen(false)} className="navbar__mobile-link">Beneficios</a>
-            <a href="#atencion" onClick={() => setMobileMenuOpen(false)} className="navbar__mobile-link">Atención</a>
             <div className="navbar__mobile-divider" />
             <button onClick={() => { setMobileMenuOpen(false); document.getElementById('atencion')?.scrollIntoView({ behavior: 'smooth' }); }} className="navbar__mobile-btn-register cursor-pointer">
-              <UserPlus size={20} /> Regístrate
+              <AlertCircle size={20} /> Más Información
             </button>
           </div>
         </div>
@@ -310,10 +310,11 @@ export default function Home() {
               <div className="benefits__image-circle">
                 <div className="benefits__image-frame">
                   <img
-                    src="https://images.unsplash.com/photo-1593950315186-76a92975b60c?auto=format&fit=crop&q=80&w=800"
-                    alt="Taxi Blanco Profesional"
+                    src="https://images.unsplash.com/photo-1610886023290-6ba32b20e354?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                    alt="Equipo TAXIMAST"
                     className="benefits__image"
                   />
+                  <div className="benefits__image-overlay" />
                 </div>
                 {/* Iconos flotantes decorativos */}
                 <div className="benefits__float-icon--whatsapp" style={{ animationDuration: '4s' }}>
@@ -493,12 +494,12 @@ export default function Home() {
           {/* Marca y Ubicación */}
           <div className="footer__brand">
             <div className="footer__brand-name">
-              <Zap size={14} />
+              <CarTaxiFront size={20} />
               <span>TAXIMAST</span>
             </div>
             <span className="footer__brand-divider" />
             <div className="footer__brand-location">
-              <MapPin size={12} />
+              <MapPin size={20} />
               <span>Venezuela</span>
             </div>
           </div>
