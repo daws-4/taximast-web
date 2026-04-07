@@ -50,7 +50,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         const conductor = await ConductoresModel.findByIdAndUpdate(
             id,
             { $set: updateData },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).populate("linea", "name");
 
         return NextResponse.json({ ok: true, data: conductor });

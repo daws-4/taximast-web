@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Iniciar sesión — Taximast",
-    description: "Accede a la plataforma de operadores de Taximast",
+    title: "Iniciar sesión — T@XINET",
+    description: "Accede a la plataforma de operadores de T@XINET",
 };
 
 export default function LoginLayout({

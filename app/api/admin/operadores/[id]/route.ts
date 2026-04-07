@@ -91,7 +91,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         const operador = await OperadoresModel.findByIdAndUpdate(
             id,
             { $set: updateData },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).select("-password").populate("linea", "name");
 
         return NextResponse.json({

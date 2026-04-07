@@ -484,7 +484,7 @@ export default function DashboardClient({ user }: DashboardClientProps) {
             {/* ── Topbar ──────────────────────────────────────────────────────── */}
             <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 sticky top-0 z-10 backdrop-blur-sm" style={{ backgroundColor: `${C.onyx}cc` }}>
                 <div className="flex items-center gap-3">
-                    <span className="text-2xl font-extrabold tracking-tight" style={{ color: C.brightGold }}>Taximast</span>
+                    <span className="text-2xl font-extrabold tracking-tight" style={{ color: C.brightGold }}>T@XINET</span>
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full border" style={{ color: C.saffron, borderColor: `${C.saffron}55`, backgroundColor: `${C.saffron}15` }}>
                         {rolLabel}
                     </span>

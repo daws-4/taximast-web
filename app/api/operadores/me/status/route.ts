@@ -26,7 +26,7 @@ async function handler(req: NextRequest) {
         const operador = await OperadoresModel.findByIdAndUpdate(
             user.id,
             { status },
-            { new: true, select: "nombre status" }
+            { returnDocument: 'after', select: "nombre status" }
         );
 
         if (!operador) {

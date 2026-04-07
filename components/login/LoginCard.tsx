@@ -6,7 +6,7 @@ import { Button } from "@heroui/button";
 import { Alert } from "@heroui/alert";
 import { FormEvent } from "react";
 
-// Paleta Taximast como constantes — garantiza que siempre se apliquen
+// Paleta T@XINET como constantes — garantiza que siempre se apliquen
 const C = {
     onyx: "#0b0c0c",
     jetBlack: "#2a2e34",
@@ -46,7 +46,7 @@ export default function LoginCard({
                     className="text-5xl font-extrabold tracking-tight leading-none"
                     style={{ color: C.brightGold }}
                 >
-                    Taximast
+                    T@XINET
                 </span>
                 <p className="text-sm mt-1" style={{ color: `${C.platinum}99` }}>
                     Plataforma de Operadores WhatsApp

@@ -86,7 +86,7 @@ export default function Home() {
             <div className="navbar__logo-icon">
               <CarTaxiFront size={20} />
             </div>
-            <span>TAXIMAST</span>
+            <span>T@XINET</span>
           </div>
 
           {/* Navegación Desktop */}
@@ -146,7 +146,7 @@ export default function Home() {
             <span className="hero__title-highlight">La tecnología que tus clientes piden, con el control que tú necesitas.</span>
           </h1>
           <p className="hero__subtitle">
-            Descubre el Ecosistema <span className="hero__subtitle-brand">TAXIMAST</span>: La solución definitiva que integra escritorio, web e inteligencia artificial para automatizar tu comunicación por <span className="hero__subtitle-whatsapp">WhatsApp Oficial</span>.
+            Descubre el Ecosistema <span className="hero__subtitle-brand">T@XINET</span>: La solución definitiva que integra escritorio, web e inteligencia artificial para automatizar tu comunicación por <span className="hero__subtitle-whatsapp">WhatsApp Oficial</span>.
           </p>
           <div className="hero__actions">
             <button className="hero__btn-primary cursor-pointer">
@@ -168,7 +168,7 @@ export default function Home() {
               <div className="about__glow" />
               <h2 className="about__title">Digitaliza tu línea <br /> <span className="about__title-fade">y despacha 3 veces más rápido</span></h2>
               <p className="about__description">
-                En <span className="about__description-brand">TAXIMAST</span>, convertimos lineas tradicionales en empresas tecnológicas de alto rendimiento. Eliminamos las fugas de dinero por mala gestión y devolvemos la autoridad al operador mediante herramientas de IA y monitoreo en tiempo real.
+                En <span className="about__description-brand">T@XINET</span>, convertimos lineas tradicionales en empresas tecnológicas de alto rendimiento. Eliminamos las fugas de dinero por mala gestión y devolvemos la autoridad al operador mediante herramientas de IA y monitoreo en tiempo real.
               </p>
               <div className="about__cards">
                 <div className="about__card">
@@ -178,7 +178,7 @@ export default function Home() {
                 </div>
                 <div className="about__card">
                   <Users className="about__card-icon" size={32} />
-                  <h4 className="about__card-title">RESPALDO TAXIMAST</h4>
+                  <h4 className="about__card-title">RESPALDO T@XINET</h4>
                   <p className="about__card-desc">Únete a la red de líneas que ya están optimizando sus ingresos con nuestra inteligencia aplicada.</p>
                 </div>
               </div>
@@ -187,7 +187,7 @@ export default function Home() {
               <div className="about__image-frame">
                 <img
                   src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&q=80&w=800"
-                  alt="Equipo TAXIMAST"
+                  alt="Equipo T@XINET"
                   className="about__image"
                 />
                 <div className="about__image-overlay" />
@@ -247,7 +247,7 @@ export default function Home() {
             <div>
               <p className="ecosystem__label">Integración Total</p>
               <h2 className="ecosystem__title">
-                El Ecosistema TAXIMAST
+                El Ecosistema T@XINET
               </h2>
             </div>
             <p className="ecosystem__subtitle">Sistemas de alto impacto diseñados para escalar.</p>
@@ -258,7 +258,7 @@ export default function Home() {
               <div className="eco-card__icon">
                 <Monitor className="text-blue-500" size={32} strokeWidth={2.5} />
               </div>
-              <h3 className="eco-card__name">1. TAXIMAST Desktop</h3>
+              <h3 className="eco-card__name">1. T@XINET Desktop</h3>
               <p className="eco-card__tag">CORE SYSTEM</p>
               <p className="eco-card__desc">
                 Centro de mando local para la gestión masiva de datos. Registra cada kilómetro y cada centavo con precisión quirúrgica.
@@ -269,7 +269,7 @@ export default function Home() {
               <div className="eco-card__icon">
                 <Globe className="text-emerald-400" size={32} strokeWidth={2.5} />
               </div>
-              <h3 className="eco-card__name">2. TAXIMAST Web</h3>
+              <h3 className="eco-card__name">2. T@XINET Web</h3>
               <p className="eco-card__tag">CLOUD SYNC</p>
               <p className="eco-card__desc">
                 El motor de conexión global que escala tu operación. Sincronización en tiempo real con la API de WhatsApp Business.
@@ -311,7 +311,7 @@ export default function Home() {
                 <div className="benefits__image-frame">
                   <img
                     src="https://images.unsplash.com/photo-1610886023290-6ba32b20e354?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                    alt="Equipo TAXIMAST"
+                    alt="Equipo T@XINET"
                     className="benefits__image"
                   />
                   <div className="benefits__image-overlay" />
@@ -423,7 +423,7 @@ export default function Home() {
               <h2 className="contact__header-title">Más Información</h2>
             </div>
             <p className="contact__header-right">
-              Soporte directo <br /> <span>Garantía TAXIMAST</span>
+              Soporte directo <br /> <span>Garantía T@XINET</span>
             </p>
           </div>
 
@@ -495,7 +495,7 @@ export default function Home() {
           <div className="footer__brand">
             <div className="footer__brand-name">
               <CarTaxiFront size={20} />
-              <span>TAXIMAST</span>
+              <span>T@XINET</span>
             </div>
             <span className="footer__brand-divider" />
             <div className="footer__brand-location">

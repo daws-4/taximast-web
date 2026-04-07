@@ -1,7 +1,7 @@
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "Taximast",
+  name: "T@XINET",
   description: "Plataforma de Operadores WhatsApp",
 
 };
