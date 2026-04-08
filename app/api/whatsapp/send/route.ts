@@ -90,10 +90,11 @@ export async function POST(req: NextRequest) {
 
         // 4. Guardar el mensaje saliente en el chat
         const now = new Date();
+        const textoFaltante = type === "audio" ? "[Audio]" : type === "sticker" ? "[Sticker]" : type === "image" ? "[Imagen]" : type === "video" ? "[Video]" : "[Documento]";
         const nuevoMensaje = {
             _id: new mongoose.Types.ObjectId(),
             origen: 'operador' as const,
-            texto: isMediaOut ? (caption || '') : message,
+            texto: isMediaOut ? (caption || textoFaltante) : message,
             timestamp: now,
             leido: true, // El operador lee su propio mensaje
             estado: 'enviado' as const,

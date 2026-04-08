@@ -177,3 +177,42 @@ export async function uploadDriverPhoto(
         return null;
     }
 }
+
+// ── Stickers ─────────────────────────────────────────────────────────────
+
+const STICKERS_COLLECTION = 'TAXIMAST_stickers';
+
+export interface Sticker {
+    id: string;
+    nombre: string;
+    emoji: string;
+    url: string;
+}
+
+export async function getStickers(): Promise<Sticker[]> {
+    if (!PB_URL) return [];
+    
+    // We can fetch stickers without auth if public, but using admin token is safest
+    const token = await getAdminToken();
+    if (!token) return [];
+
+    try {
+        const res = await fetch(`${PB_URL}/api/collections/${STICKERS_COLLECTION}/records?perPage=100`, { 
+            headers: { 'Authorization': token } 
+        });
+
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        return (data.items || []).map((record: any) => ({
+            id: record.id,
+            nombre: record.nombre,
+            emoji: record.emoji,
+            url: `${PB_URL}/api/files/${record.collectionId}/${record.id}/${record.archivo}`
+        }));
+    } catch (err) {
+        console.error('[pocketbase] getStickers error:', err);
+        return [];
+    }
+}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { JWTPayload } from "@/lib/auth";
 import { getSocket, SOCKET_EVENTS, CLIENT_EVENTS } from "@/lib/socket";
+import AudioRecorder from "./AudioRecorder";
 
 // ─── Paleta ───────────────────────────────────────────────────────────────────
 const C = {
@@ -15,6 +16,13 @@ const C = {
 } as const;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+interface Sticker {
+    id: string;
+    nombre: string;
+    emoji: string;
+    url: string;
+}
+
 interface ChatSummary {
     _id: string;
     linea?: { _id: string; name: string };
@@ -213,7 +221,7 @@ function MessageBubble({ msg }: { msg: Message }) {
                     </div>
 
                     {isSystemMedia && (
-                        <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : 'bg-black/20 min-h-[120px] min-w-[120px]'}`}>
+                        <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : (msg.tipo === 'sticker' ? 'bg-transparent border-none' : 'bg-black/20 min-h-[120px] min-w-[120px]')}`}>
                             {msg.tipo === "image" || msg.tipo === "sticker" ? (
                                 msg.media_url ? (
                                     // eslint-disable-next-line @next/next/no-img-element
@@ -253,7 +261,7 @@ function MessageBubble({ msg }: { msg: Message }) {
             >
                 {/* Multimedia Rendering Proxy */}
                 {isMedia && (
-                    <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : 'bg-black/20 min-h-[120px] min-w-[120px]'}`}>
+                    <div className={`mb-2 rounded-lg overflow-hidden flex items-center justify-center relative ${msg.tipo === 'audio' || msg.tipo === 'voice' ? 'w-full' : (msg.tipo === 'sticker' ? 'bg-transparent border-none outline-none shadow-none min-h-[80px]' : 'bg-black/20 min-h-[120px] min-w-[120px]')}`}>
                         {msg.tipo === "image" || msg.tipo === "sticker" ? (
                             msg.media_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -281,7 +289,7 @@ function MessageBubble({ msg }: { msg: Message }) {
                                 {msg.media_url && <a href={msg.media_url} download className="text-xs hover:underline text-blue-400 mt-1">Descargar</a>}
                             </div>
                         )}
-                        {(msg.tipo !== 'audio' && msg.tipo !== 'voice') && <span className="absolute bottom-2 right-2 text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded shadow-sm" style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: C.platinum }}>{msg.tipo}</span>}
+                        {(!["audio", "voice", "sticker"].includes(msg.tipo ?? "")) && <span className="absolute bottom-2 right-2 text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded shadow-sm" style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: C.platinum }}>{msg.tipo}</span>}
                     </div>
                 )}
 
@@ -313,8 +321,25 @@ function ConversationPanel({
     const [texto, setTexto] = useState("");
     const [attachment, setAttachment] = useState<File | null>(null);
     const [sending, setSending] = useState(false);
+    const [recording, setRecording] = useState(false);
+    const [showStickers, setShowStickers] = useState(false);
+    const [stickersList, setStickersList] = useState<Sticker[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const optimisticUrls = useRef<Record<string, string>>({}); // Maps our generated UUIDs to blobUrls
+
+    useEffect(() => {
+        return () => {
+            // Revoke blobs on unmount
+            Object.values(optimisticUrls.current).forEach(url => URL.revokeObjectURL(url));
+        };
+    }, []);
+
+    useEffect(() => {
+        fetch("/api/stickers").then(res => res.json()).then(data => {
+            if (data.success) setStickersList(data.data);
+        }).catch(err => console.error(err));
+    }, []);
 
     const loadChat = useCallback(async () => {
         setLoading(true);
@@ -338,11 +363,30 @@ function ConversationPanel({
             if (payload.chatId === chatId) {
                 setChat((prev) => {
                     if (!prev) return prev;
-                    // Evitar duplicados si el evento de la sala 'linea' y 'chat' llegan al mismo tiempo
-                    const alreadyExists = prev.mensajes.some((m) => m._id === payload.mensaje._id);
-                    if (alreadyExists) return prev;
+                    
+                    // Replace optimistic message if it exists (assuming wa_message_id is used or just check for existence)
+                    const existingOptimistic = prev.mensajes.findIndex(m => 
+                        m.origen === payload.mensaje.origen && 
+                        m.texto === payload.mensaje.texto &&
+                        m.tipo === payload.mensaje.tipo &&
+                        m.estado === "pendiente" &&
+                        Math.abs(new Date(m.timestamp).getTime() - new Date(payload.mensaje.timestamp).getTime()) < 5000
+                    );
 
-                    return { ...prev, mensajes: [...prev.mensajes, payload.mensaje] };
+                    let newMensajes = [...prev.mensajes];
+                    
+                    if (existingOptimistic !== -1) {
+                        const optId = prev.mensajes[existingOptimistic]._id;
+                        // We found our optimistic message, replace it with the real one from server
+                        newMensajes[existingOptimistic] = payload.mensaje;
+                        // We do NOT revoke the blob URL immediately to avoid flickering, let it stay in map
+                    } else {
+                        const alreadyExists = prev.mensajes.some((m) => m._id === payload.mensaje._id);
+                        if (alreadyExists) return prev;
+                        newMensajes.push(payload.mensaje);
+                    }
+
+                    return { ...prev, mensajes: newMensajes };
                 });
             }
         };
@@ -387,26 +431,57 @@ function ConversationPanel({
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chat?.mensajes.length]);
 
-    async function handleSend(e: React.FormEvent) {
-        e.preventDefault();
-        if ((!texto.trim() && !attachment) || !chat) return;
-        setSending(true);
+    async function handleSend(e?: React.FormEvent, directFile?: File, directMsgType?: string) {
+        if (e) e.preventDefault();
+        
+        const currentAttachment = directFile || attachment;
         const textToSend = texto.trim();
-        const currentAttachment = attachment;
-        setTexto("");
-        setAttachment(null);
+        
+        if ((!textToSend && !currentAttachment) || !chat) return;
+        
+        setSending(true);
+        if (!directFile) {
+            setTexto("");
+            setAttachment(null);
+            setShowStickers(false);
+        }
 
-        try {
-            let mediaId = undefined;
-            let msgType = "text";
+        let mediaId = undefined;
+        let msgType = directMsgType || "text";
+        let optimisticUrl = "";
 
-            if (currentAttachment) {
-                // Determinar el tipo para WhatsApp
+        if (currentAttachment) {
+            if (!directMsgType) {
                 if (currentAttachment.type.startsWith("image/")) msgType = "image";
                 else if (currentAttachment.type.startsWith("video/")) msgType = "video";
                 else if (currentAttachment.type.startsWith("audio/")) msgType = "audio";
                 else msgType = "document";
+            }
+            
+            // Generate optimistic UI url
+            optimisticUrl = URL.createObjectURL(currentAttachment);
+            const uuid = Math.random().toString(36).substring(7);
+            optimisticUrls.current[uuid] = optimisticUrl;
 
+            // Insert Optimistic Message
+            const optimisticMsg: Message = {
+                _id: uuid,
+                origen: "operador",
+                texto: msgType !== "audio" && msgType !== "sticker" ? textToSend : `[${msgType}]`,
+                timestamp: new Date().toISOString(),
+                estado: "pendiente",
+                tipo: msgType,
+                media_url: optimisticUrl
+            };
+            
+            setChat(prev => {
+                if (!prev) return prev;
+                return { ...prev, mensajes: [...prev.mensajes, optimisticMsg] };
+            });
+        }
+
+        try {
+            if (currentAttachment) {
                 // Subir el archivo temporalmente a Meta CDN
                 const formData = new FormData();
                 formData.append("file", currentAttachment);
@@ -440,8 +515,10 @@ function ConversationPanel({
             });
         } catch(error) {
             console.error("Error sending message:", error);
-            setTexto(textToSend); // Restore inputs
-            setAttachment(currentAttachment);
+            if (!directFile) {
+                setTexto(textToSend); // Restore inputs
+                setAttachment(currentAttachment);
+            }
         } finally {
             setSending(false);
         }
@@ -572,8 +649,40 @@ function ConversationPanel({
                 <div ref={bottomRef} />
             </div>
 
-            {/* Input Wrapper */}
-            <div className="flex flex-col border-t shrink-0" style={{ borderColor: `${C.platinum}10`, backgroundColor: `${C.onyx}cc` }}>
+        {/* Panel de Stickers */}
+        {showStickers && (
+            <div className="px-4 py-3 border-t bg-black/40 backdrop-blur-md shrink-0 flex gap-3 overflow-x-auto" style={{ borderColor: `${C.platinum}10` }}>
+                {stickersList.length === 0 ? (
+                    <p className="text-xs text-center w-full" style={{ color: `${C.platinum}55` }}>No hay stickers disponibles.</p>
+                ) : (
+                    stickersList.map(sticker => (
+                        <button
+                            key={sticker.id}
+                            title={sticker.nombre}
+                            type="button"
+                            onClick={async () => {
+                                setShowStickers(false);
+                                try {
+                                    const res = await fetch(sticker.url);
+                                    const blob = await res.blob();
+                                    const file = new File([blob], "sticker.webp", { type: "image/webp" });
+                                    handleSend(undefined, file, "sticker");
+                                } catch (e) {
+                                    console.error("Error al enviar sticker", e);
+                                }
+                            }}
+                            className="w-16 h-16 shrink-0 transition-transform hover:scale-110 cursor-pointer"
+                        >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={sticker.url} alt={sticker.nombre} className="w-full h-full object-contain drop-shadow-md" />
+                        </button>
+                    ))
+                )}
+            </div>
+        )}
+
+        {/* Input Wrapper */}
+        <div className="flex flex-col border-t shrink-0" style={{ borderColor: `${C.platinum}10`, backgroundColor: `${C.onyx}cc` }}>
                 
                 {/* Preview de adjunto */}
                 {attachment && (
@@ -598,7 +707,7 @@ function ConversationPanel({
 
                 <form
                     onSubmit={handleSend}
-                    className="flex items-end gap-2 px-4 py-3"
+                    className="flex items-end gap-2 px-4 py-3 relative"
                 >
                     <input 
                         type="file" 
@@ -611,53 +720,94 @@ function ConversationPanel({
                             }
                         }}
                     />
+                    
                     {/* Botón Adjuntar */}
-                    <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="p-3 rounded-xl transition-colors shrink-0 flex items-center justify-center hover:bg-white/5 cursor-pointer"
-                        style={{ color: `${C.platinum}88` }}
-                        title="Adjuntar multimedia"
-                    >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                        </svg>
-                    </button>
+                    <div className="flex gap-1 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-3 rounded-xl transition-colors shrink-0 flex items-center justify-center hover:bg-white/5 cursor-pointer"
+                            style={{ color: `${C.platinum}88` }}
+                            title="Adjuntar multimedia"
+                        >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                            </svg>
+                        </button>
 
-                    <textarea
-                        rows={1}
-                        value={texto}
-                        onChange={(e) => setTexto(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend(e as unknown as React.FormEvent);
-                            }
-                        }}
-                        placeholder={attachment ? "Añade un comentario..." : "Escribe un mensaje… (Enter para enviar)"}
-                        maxLength={4096}
-                        className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm border outline-none transition-colors"
-                        style={{
-                            backgroundColor: `${C.jetBlack}`,
-                            borderColor: `${C.platinum}18`,
-                            color: C.platinum,
-                            maxHeight: "120px",
-                        }}
-                        onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}44`)}
-                        onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}18`)}
-                    />
-                    <button
-                        type="submit"
-                        disabled={sending || (!texto.trim() && !attachment)}
-                        className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 cursor-pointer"
-                        style={{
-                            backgroundColor: C.brightGold,
-                            color: C.onyx,
-                            opacity: sending || (!texto.trim() && !attachment) ? 0.5 : 1,
-                        }}
-                    >
-                        {sending ? "…" : "Enviar"}
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowStickers(prev => !prev)}
+                            className="p-3 rounded-xl transition-colors shrink-0 flex items-center justify-center hover:bg-white/5 cursor-pointer"
+                            style={{ color: showStickers ? C.brightGold : `${C.platinum}88` }}
+                            title="Enviar Sticker"
+                        >
+                            <span className="text-xl leading-none">😊</span>
+                        </button>
+                    </div>
+
+                    {recording ? (
+                        <AudioRecorder 
+                            onStop={(blob) => {
+                                setRecording(false);
+                                if (blob.size > 0) {
+                                    const file = new File([blob], "audio.webm", { type: "audio/webm;codecs=opus" });
+                                    handleSend(undefined, file, "audio");
+                                }
+                            }}
+                            onCancel={() => setRecording(false)}
+                        />
+                    ) : (
+                        <textarea
+                            rows={1}
+                            value={texto}
+                            onChange={(e) => setTexto(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend(e as unknown as React.FormEvent);
+                                }
+                            }}
+                            placeholder={attachment ? "Añade un comentario..." : "Escribe un mensaje… (Enter para enviar)"}
+                            maxLength={4096}
+                            className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm border outline-none transition-colors"
+                            style={{
+                                backgroundColor: `${C.jetBlack}`,
+                                borderColor: `${C.platinum}18`,
+                                color: C.platinum,
+                                maxHeight: "120px",
+                            }}
+                            onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}44`)}
+                            onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}18`)}
+                        />
+                    )}
+                    
+                    {!recording && (
+                        (texto.trim() || attachment) ? (
+                            <button
+                                type="submit"
+                                disabled={sending}
+                                className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 cursor-pointer"
+                                style={{
+                                    backgroundColor: C.brightGold,
+                                    color: C.onyx,
+                                    opacity: sending ? 0.5 : 1,
+                                }}
+                            >
+                                {sending ? "…" : "Enviar"}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setRecording(true)}
+                                className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors shrink-0 flex items-center justify-center cursor-pointer"
+                                style={{ color: C.platinum }}
+                                title="Grabar audio"
+                            >
+                                <span className="text-xl leading-none">🎙️</span>
+                            </button>
+                        )
+                    )}
                 </form>
             </div>
         </div>
