@@ -38,17 +38,21 @@ export function proxy(req: NextRequest) {
         }
     }
 
-    // ── Rutas de WhatsApp API: autenticación por API Key ──
+    // ── Rutas de WhatsApp API: autenticación por API Key o JWT ──
     if (pathname.startsWith(WA_API_ROUTES) && !pathname.startsWith("/api/whatsapp/webhook")) {
         const authHeader = req.headers.get("authorization");
         const waApiKey = process.env.WA_API_KEY;
+        const hasValidToken = token && verifyToken(token);
 
+        let passesApiKey = false;
         if (!waApiKey) {
             // Si no hay API key configurada en el servidor, permitir (desarrollo)
-            return NextResponse.next();
+            passesApiKey = true;
+        } else if (authHeader === `Bearer ${waApiKey}`) {
+            passesApiKey = true;
         }
 
-        if (!authHeader || authHeader !== `Bearer ${waApiKey}`) {
+        if (!passesApiKey && !hasValidToken) {
             return NextResponse.json(
                 { error: "API key inválida o faltante", connected: false },
                 { status: 401 }
