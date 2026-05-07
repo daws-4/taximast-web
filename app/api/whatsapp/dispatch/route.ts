@@ -261,8 +261,12 @@ export async function POST(req: NextRequest) {
                 if (type === 'dispatch_driver') chat.tipo_chat = 'conductor';
             }
             // Cerrar chat del cliente cuando se le envía info del conductor
+            // Manejar cambios de estado
             if (type === 'dispatch_client') {
                 chat.estado = 'cerrado';
+            } else if (type === 'dispatch_driver') {
+                chat.estado = 'en_atencion';
+                chat.tipo_chat = 'conductor';
             }
             await chat.save();
         }
@@ -306,10 +310,11 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // Si se cerró el chat, emitir evento de cambio de estado
-            if (type === 'dispatch_client') {
-                io.to(`chat:${chatId}`).emit('chat:estado_cambiado', { chatId, estado: 'cerrado' });
-                io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:estado_cambiado', { chatId, estado: 'cerrado' });
+            // Si se cambió de estado, emitir evento
+            if (type === 'dispatch_client' || type === 'dispatch_driver') {
+                const newEstado = type === 'dispatch_client' ? 'cerrado' : 'en_atencion';
+                io.to(`chat:${chatId}`).emit('chat:estado_cambiado', { chatId, estado: newEstado });
+                io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:estado_cambiado', { chatId, estado: newEstado });
             }
         }
 

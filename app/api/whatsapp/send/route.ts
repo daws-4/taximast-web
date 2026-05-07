@@ -11,7 +11,7 @@ const WA_API_BASE = 'https://graph.facebook.com';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { phone, message, type = 'text', chatId, caption } = body;
+        const { phone, message, type = 'text', chatId, caption, localId } = body;
 
         if (!phone || !message || !chatId) {
             return NextResponse.json(
@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
             const lineaId = chat.linea.toString();
             const mensajePayload = {
                 _id: nuevoMensaje._id.toString(), // Mismo ID que MongoDB
+                localId: localId, // ID local del front end para Optimistic UI
                 origen: nuevoMensaje.origen,
                 texto: nuevoMensaje.texto,
                 timestamp: now.toISOString(),

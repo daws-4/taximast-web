@@ -359,18 +359,19 @@ function ConversationPanel({
         const socket = getSocket();
         socket.emit(CLIENT_EVENTS.JOIN_CHAT, chatId);
 
-        const handleNuevoMensaje = (payload: { chatId: string; mensaje: Message }) => {
+        const handleNuevoMensaje = (payload: { chatId: string; mensaje: Message & { localId?: string } }) => {
             if (payload.chatId === chatId) {
                 setChat((prev) => {
                     if (!prev) return prev;
                     
-                    // Replace optimistic message if it exists (assuming wa_message_id is used or just check for existence)
+                    // Replace optimistic message if it exists
                     const existingOptimistic = prev.mensajes.findIndex(m => 
-                        m.origen === payload.mensaje.origen && 
-                        m.texto === payload.mensaje.texto &&
-                        m.tipo === payload.mensaje.tipo &&
                         m.estado === "pendiente" &&
-                        Math.abs(new Date(m.timestamp).getTime() - new Date(payload.mensaje.timestamp).getTime()) < 5000
+                        m.origen === "operador" &&
+                        ((payload.mensaje.localId && m._id === payload.mensaje.localId) ||
+                         (!payload.mensaje.localId && m.tipo === payload.mensaje.tipo &&
+                          (m.texto === payload.mensaje.texto || ["image", "video", "audio", "document", "sticker", "voice"].includes(m.tipo || "")) &&
+                          Math.abs(new Date(m.timestamp).getTime() - new Date(payload.mensaje.timestamp).getTime()) < 60000))
                     );
 
                     let newMensajes = [...prev.mensajes];
@@ -449,6 +450,7 @@ function ConversationPanel({
         let mediaId = undefined;
         let msgType = directMsgType || "text";
         let optimisticUrl = "";
+        const localId = Math.random().toString(36).substring(7);
 
         if (currentAttachment) {
             if (!directMsgType) {
@@ -460,12 +462,11 @@ function ConversationPanel({
             
             // Generate optimistic UI url
             optimisticUrl = URL.createObjectURL(currentAttachment);
-            const uuid = Math.random().toString(36).substring(7);
-            optimisticUrls.current[uuid] = optimisticUrl;
+            optimisticUrls.current[localId] = optimisticUrl;
 
             // Insert Optimistic Message
             const optimisticMsg: Message = {
-                _id: uuid,
+                _id: localId,
                 origen: "operador",
                 texto: msgType !== "audio" && msgType !== "sticker" ? textToSend : `[${msgType}]`,
                 timestamp: new Date().toISOString(),
@@ -511,6 +512,7 @@ function ConversationPanel({
                     caption: mediaId ? textToSend : undefined,
                     type: msgType,
                     chatId: chat._id,
+                    localId: localId,
                 }),
             });
         } catch(error) {
@@ -900,15 +902,34 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
         const roomId = isAdmin ? "admin" : user.linea;
         socket.emit(CLIENT_EVENTS.JOIN_LINEA, roomId);
 
-        // Nuevo mensaje en cualquier chat → actualizar ultimoMensaje de ese chat
+        const fetchChatsSilent = async () => {
+            const params = new URLSearchParams();
+            if (lineaFilter) params.set("linea", lineaFilter);
+            if (estadoFilter) params.set("estado", estadoFilter);
+            if (q) params.set("q", q);
+            try {
+                const res = await fetch(`/api/chats?${params}`);
+                const data = await res.json();
+                if (data.ok) setChats(data.data);
+            } catch (e) { }
+        };
+
+        // Nuevo mensaje en cualquier chat → traer al tope y actualizar ultimoMensaje
         const handleNuevoMensajeList = (payload: { chatId: string; mensaje: Message }) => {
-            setChats((prev) =>
-                prev.map((c) =>
-                    c._id === payload.chatId
-                        ? { ...c, ultimoMensaje: payload.mensaje.timestamp }
-                        : c
-                )
-            );
+            setChats((prev) => {
+                const index = prev.findIndex((c) => c._id === payload.chatId);
+                if (index !== -1) {
+                    const sorted = [...prev];
+                    const found = { ...sorted[index], ultimoMensaje: payload.mensaje.timestamp };
+                    sorted.splice(index, 1);
+                    return [found, ...sorted];
+                }
+                
+                // Si el chat no está visible (puede estar en otra página o filtrado),
+                // actualizamos la lista silenciosamente por si debiera aparecer.
+                fetchChatsSilent();
+                return prev;
+            });
         };
 
         // Nueva conversación → agregar al top de la lista
@@ -919,11 +940,19 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
         // Estado de un chat cambió
         const handleEstadoCambiadoList = (payload: { chatId: string; estado: string }) => {
             console.log("[ChatPageClient] Recibido socket ESTADO_CAMBIADO:", payload);
-            setChats((prev) =>
-                prev.map((c) =>
-                    c._id === payload.chatId ? { ...c, estado: payload.estado as ChatSummary["estado"] } : c
-                )
-            );
+            setChats((prev) => {
+                const index = prev.findIndex((c) => c._id === payload.chatId);
+                if (index !== -1) {
+                    // Actualizar el estado in-place
+                    return prev.map((c) =>
+                        c._id === payload.chatId ? { ...c, estado: payload.estado as ChatSummary["estado"] } : c
+                    );
+                }
+                
+                // Si cambia de estado y no estaba (ej. un chat cerrado que se reabre), silente refetch.
+                fetchChatsSilent();
+                return prev;
+            });
         };
 
         // Chat eliminado → quitarlo de la lista

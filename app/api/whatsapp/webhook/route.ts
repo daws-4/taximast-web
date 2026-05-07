@@ -8,11 +8,11 @@ import ConductoresModel from '@/models/Conductores';
 import { getGeminiReply } from '@/lib/gemini';
 
 // ─── Verificación HMAC-SHA256 ─────────────────────────────────────────────────
-function verifySignature(rawBody: string, signature: string | null): boolean {
-    const secret = process.env.WHATSAPP_APP_SECRET;
-    if (!secret || !signature) return false;
+function verifySignature(rawBody: string, signature: string | null, secret?: string): boolean {
+    const finalSecret = secret || process.env.WHATSAPP_APP_SECRET;
+    if (!finalSecret || !signature) return false;
     const expected = 'sha256=' + crypto
-        .createHmac('sha256', secret)
+        .createHmac('sha256', finalSecret)
         .update(rawBody, 'utf8')
         .digest('hex');
     // Comparación en tiempo constante (longitudes iguales → safe contra timing attacks)
@@ -78,20 +78,29 @@ export async function GET(req: NextRequest) {
 
 // ─── POST — Recepción de mensajes entrantes ───────────────────────────────────
 export async function POST(req: NextRequest) {
-    // 1. Leer raw body para verificar firma
+    console.log(`[webhook] POST recibido a las ${new Date().toISOString()}`);
     const rawBody = await req.text();
     const signature = req.headers.get('x-hub-signature-256');
 
-    if (!verifySignature(rawBody, signature)) {
-        console.warn('[webhook] Firma inválida rechazada');
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
-    }
-
-    // Procesamos el webhook
     try {
         const body = JSON.parse(rawBody);
-        // Esperar a que el proceso termine antes de responder
-        // Meta nos da hasta 20 segundos. MongoDB tarda milisegundos.
+        const phoneNumberId = body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+
+        let lineaSecret = undefined;
+        if (phoneNumberId) {
+            await connectDB();
+            const linea = await LineasModel.findOne({ phone_number_id: phoneNumberId }).select('+app_secret').lean();
+            if (linea?.app_secret) {
+                lineaSecret = linea.app_secret;
+                console.log(`[webhook] Usando App Secret específico para la línea: ${linea.name}`);
+            }
+        }
+
+        if (!verifySignature(rawBody, signature, lineaSecret)) {
+            console.warn('[webhook] Firma inválida rechazada');
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+        }
+
         await processWebhook(body);
     } catch (err: unknown) {
         console.error('[webhook] Error procesando payload:', err);
@@ -111,6 +120,7 @@ async function processWebhook(body: Record<string, any>) {
     if (!value?.messages?.length && !value?.statuses?.length) return;
 
     const phoneNumberId: string = value.metadata?.phone_number_id;
+    console.log(`[webhook] Recibido evento para phone_number_id: ${phoneNumberId}`);
     if (!phoneNumberId) return;
 
     await connectDB();
@@ -122,9 +132,10 @@ async function processWebhook(body: Record<string, any>) {
         .lean();
 
     if (!linea) {
-        console.warn(`[webhook] Ninguna línea encontrada para phone_number_id=${phoneNumberId}`);
+        console.warn(`[webhook] Ninguna línea encontrada para phone_number_id=${phoneNumberId}. Asegúrate de que el ID coincide en la base de datos.`);
         return;
     }
+    console.log(`[webhook] Línea encontrada: ${linea.name} (activa: ${linea.activa})`);
 
     if (linea.activa === false) {
         console.warn(`[webhook] Mensaje ignorado: La línea "${linea.name}" (${phoneNumberId}) está inactiva.`);
@@ -270,14 +281,23 @@ async function processWebhook(body: Record<string, any>) {
         // 6. Emitir Socket.io del mensaje del CLIENTE primero (para que aparezca antes que la IA)
         if (io) {
             if (isNew) {
-                io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:nuevo_chat', {
-                    _id: chatId,
-                    linea: { _id: lineaId, name: linea.name },
-                    cliente_phone: clientePhone,
-                    cliente_nombre: clienteNombre,
-                    estado: chat.estado,
-                    ultimoMensaje: timestamp.toISOString(),
-                });
+                const chatPopulated = await ChatsModel.findById(chat._id)
+                    .populate('linea', 'name')
+                    .populate('conductor', 'nombre telefono unidad foto_identificacion')
+                    .lean();
+
+                if (chatPopulated) {
+                    io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:nuevo_chat', {
+                        _id: chatPopulated._id.toString(),
+                        linea: chatPopulated.linea,
+                        cliente_phone: chatPopulated.cliente_phone,
+                        cliente_nombre: chatPopulated.cliente_nombre,
+                        tipo_chat: chatPopulated.tipo_chat,
+                        conductor: chatPopulated.conductor,
+                        estado: chatPopulated.estado,
+                        ultimoMensaje: timestamp.toISOString(),
+                    });
+                }
             } else {
                 // Inyectar la burbuja del cliente en la sala activa
                 io.to(`chat:${chatId}`).emit('chat:nuevo_mensaje', {

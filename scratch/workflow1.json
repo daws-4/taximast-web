@@ -1,0 +1,166 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "076d29e4-1c08-49cb-be44-fdcc2036c405",
+              "leftValue": "={{ $json.messages }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        32
+      ],
+      "id": "142f4d09-858a-430d-9413-6f1c9a5689e1",
+      "name": "If (Existe Mensaje?)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "abc12345-whitelist-check-node",
+              "leftValue": "={{ $json.messages[0].from }}",
+              "rightValue": "^(573236617287|584120691296|584122443281|584246520946|584122454496|34634870803)$",
+              "operator": {
+                "type": "string",
+                "operation": "regex",
+                "name": "filter.operator.regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        16
+      ],
+      "id": "54fd73fd-7038-4c05-94fb-b2cf53d673bf",
+      "name": "Whitelist Check"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -672,
+        32
+      ],
+      "id": "f9ad0b20-7718-4ea7-bc54-e0f177c05944",
+      "name": "WhatsApp Trigger1",
+      "webhookId": "3407f50f-657c-42f8-85d4-1284841db4f9",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "DQbrsWG3DlvKUKOU",
+          "name": "WhatsApp OAuth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "2RCbGHRAQ8cH08lU",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/2RCbGHRAQ8cH08lU",
+          "cachedResultName": "response"
+        },
+        "workflowInputs": {
+          "mappingMode": "passthrough",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "71c154d5-5e08-49ae-b7ed-e43d930c594e",
+      "name": "Call 'response'1"
+    }
+  ],
+  "connections": {
+    "If (Existe Mensaje?)": {
+      "main": [
+        [
+          {
+            "node": "Whitelist Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whitelist Check": {
+      "main": [
+        [
+          {
+            "node": "Call 'response'1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger1": {
+      "main": [
+        [
+          {
+            "node": "If (Existe Mensaje?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "af6738be0851534f3876f8d3d85601436ea1fa779ba3667ee7a417e49811e5ca"
+  }
+}

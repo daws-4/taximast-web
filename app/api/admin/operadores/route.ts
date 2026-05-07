@@ -19,7 +19,7 @@ async function getHandler(req: NextRequest) {
         // admin_linea solo ve operadores de su propia línea
         const filtro = user.rol === "admin"
             ? {}
-            : { linea: new mongoose.Types.ObjectId(user.linea), rol: { $ne: "admin" } };
+            : { linea: new mongoose.Types.ObjectId(user.linea), rol: { $ne: "admin" as const } };
 
         const operadores = await OperadoresModel.find(filtro)
             .select("-password")

@@ -122,8 +122,61 @@ El sistema utiliza un diseño **Premium Dark Mode** con acentos en oro brillante
 
 📝 *Última actualización: 9 de Marzo de 2026 — Despacho con fotos integrado (PocketBase), Módulo de Conductores y Filtro de Líneas activas.*
 
+---
 
-## tasklis
+## 🔗 Configuración de Webhook (WhatsApp Cloud API)
+
+Para que el sistema reciba mensajes en tiempo real, debes configurar el Webhook en el **Meta Developer Portal**:
+
+### 1. Datos de Configuración
+- **URL de la llamada (Callback URL):** `https://taximast.enlaredve.com/api/whatsapp/webhook`
+- **Token de verificación (Verify Token):** `MiSecretoSuperSeguro2026` *(Definido en el archivo `.env`)*
+
+### 2. Pasos para la configuración:
+1. Ve a tu App en [Meta for Developers](https://developers.facebook.com/).
+2. En el menú lateral, selecciona **WhatsApp** > **Configuración**.
+3. Haz clic en el botón **Editar** de la sección "Configuración de Webhooks".
+4. Ingresa la **Callback URL** y el **Verify Token** mencionados arriba.
+5. Una vez verificado, haz clic en **Administrar** y suscríbete al campo **messages**.
+
+### 3. Explicación del flujo:
+- **Verificación (GET):** Meta envía un "challenge" para confirmar que el servidor es tuyo. El código en `app/api/whatsapp/webhook/route.ts` valida que el token recibido coincida con el `WHATSAPP_VERIFY_TOKEN` del `.env`.
+- **Recepción (POST):** Cada mensaje entrante llega como un `POST`. El sistema verifica la firma `X-Hub-Signature-256` usando el `app_secret` de la línea (o el global del `.env`) para garantizar seguridad y autenticidad.
+
+---
+
+## 📲 Pasos para Registrar un Nuevo Número (Línea)
+
+Para que una nueva línea de taxis empiece a recibir mensajes en el sistema, sigue este procedimiento:
+
+### 1. Preparación en Meta for Developers
+1. **Obtener IDs:** En el panel de tu App de Meta (WhatsApp > Configuración de la API), copia el **ID de identificador de número de teléfono** (`phone_number_id`) y el **ID de la cuenta de WhatsApp Business** (`waba_id`).
+2. **Generar Token:** Crea un **Token de acceso permanente** (System User Token) con permisos `whatsapp_business_messaging` y `whatsapp_business_management`.
+3. **App Secret:** En "Configuración > Básica", obtén el **Identificador de la aplicación** y la **Clave secreta** (`app_secret`).
+
+### 2. Alta en el Panel Administrativo de Taximast
+1. Inicia sesión con cuenta de `admin`.
+2. Dirígete a la sección **Administración > Líneas** (`/admin/lineas`).
+3. Haz clic en **"Nueva Línea"** y completa los campos:
+   - **Nombre:** Identificador comercial (ej. *Taxi El Llano*).
+   - **Phone Number ID:** El ID obtenido en el paso 1.1.
+   - **WABA ID:** El ID de la cuenta obtenido en el paso 1.1.
+   - **Access Token:** El token permanente generado en el paso 1.2.
+   - **App Secret:** La clave secreta obtenida en el paso 1.3.
+   - **Prompt de Gemini:** Instrucciones personalizadas sobre cómo debe responder el bot para esta línea específica.
+
+### 3. Activación y Pruebas
+1. Asegúrate de que el switch **"Activa"** esté encendido.
+2. Envía un mensaje de prueba al número de WhatsApp.
+3. El sistema detectará automáticamente el `phone_number_id` entrante, buscará la línea correspondiente en la DB y procesará el mensaje.
+
+---
+
+## tasklist
+
  
 - [] Metricas detalladas sobre cantidad de servicios emitidos
-- [] Opción de enviar multimedia a través de la plataforma 
+- [] ajustar chats de conductores para que funcionen en tiempo real sin complicaciones
+- [] ajustar que gemini pueda procesar audios y según el prompt, intentar descifrarlos y responder o dar una respuesta genérica si no puede descifrarlos o si la línea quiere gastar menos en procesamiento
+- [] habilitar llamadas telefónicas a través de la plataforma web 
+- [x] Opción de enviar multimedia a través de la plataforma 

@@ -16,9 +16,12 @@ interface Linea {
     _id: string;
     name: string;
     whatsapp_number: string;
-    phone_number_id?: string;
     waba_id?: string;
+    phone_number_id?: string;
+    verify_token?: string;
+    app_secret?: string;
     activa: boolean;
+    gemini_prompt?: string;
 }
 
 interface Props {
@@ -206,9 +209,10 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
         phone_number_id: "",
         waba_id: "",
         access_token: "",
-        verify_token: "",
+        verify_token: linea.verify_token || "",
+        app_secret: "",
         gemini_api_key: "",
-        gemini_prompt: "",
+        gemini_prompt: linea.gemini_prompt || "",
         activa: linea.activa
     });
 
@@ -235,7 +239,13 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
             const res = await fetch("/api/whatsapp/verify-token", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ access_token: form.access_token, phone_number_id: form.phone_number_id }),
+                body: JSON.stringify({ 
+                    access_token: form.access_token, 
+                    phone_number_id: form.phone_number_id,
+                    waba_id: form.waba_id,
+                    expected_number: form.whatsapp_number
+                }),
+
             });
             const data = await res.json();
             if (data.ok) {
@@ -361,6 +371,8 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
 
                         <Field label="Nuevo Verify Token (webhook)" id="edit-linea-verify" value={form.verify_token} onChange={set("verify_token")} placeholder="Solo si vas a cambiarlo" />
                         
+                        <Field label="Nuevo App Secret (Meta App)" id="edit-linea-secret" type="password" value={form.app_secret} onChange={set("app_secret")} placeholder="Solo si vas a cambiarlo" />
+
                         <div className="mt-4 pt-3 border-t border-white/5">
                             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
                             <Field label="Nueva API Key de Google Gemini" id="edit-linea-gemini" type="password" value={form.gemini_api_key} onChange={set("gemini_api_key")} placeholder="AIzaSy..." />
@@ -413,7 +425,7 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
 
 // ─── Modal: Nueva Línea ────────────────────────────────────────────────────
 function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-    const [form, setForm] = useState({ name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", gemini_api_key: "", gemini_prompt: "" });
+    const [form, setForm] = useState({ name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", app_secret: "", gemini_api_key: "", gemini_prompt: "" });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -436,7 +448,13 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
             const res = await fetch("/api/whatsapp/verify-token", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ access_token: form.access_token, phone_number_id: form.phone_number_id }),
+                body: JSON.stringify({ 
+                    access_token: form.access_token, 
+                    phone_number_id: form.phone_number_id,
+                    waba_id: form.waba_id,
+                    expected_number: form.whatsapp_number
+                }),
+
             });
             const data = await res.json();
             if (data.ok) {
@@ -523,6 +541,8 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 
                         <Field label="Verify Token (webhook)" id="new-linea-verify" value={form.verify_token} onChange={set("verify_token")} placeholder="Token de verificación del webhook" />
                         
+                        <Field label="App Secret (Meta App) *" id="new-linea-secret" type="password" value={form.app_secret} onChange={set("app_secret")} placeholder="Secreto de la aplicación de Meta" required />
+
                         <div className="mt-4 pt-3 border-t border-white/5">
                             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
                             <Field label="API Key de Google Gemini (Opcional)" id="new-linea-gemini" type="password" value={form.gemini_api_key} onChange={set("gemini_api_key")} placeholder="AIzaSy..." />
