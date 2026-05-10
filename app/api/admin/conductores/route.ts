@@ -40,7 +40,7 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { nombre, cedula, telefono, unidad, notas, linea, foto_identificacion } = body;
+        const { nombre, cedula, telefono, control, placa, notas, linea, foto_identificacion } = body;
 
         if (!nombre || !telefono) {
             return NextResponse.json({ ok: false, error: "Nombre y teléfono son obligatorios" }, { status: 400 });
@@ -56,8 +56,9 @@ async function postHandler(req: NextRequest) {
         const conductor = await ConductoresModel.create({
             nombre: nombre.trim(),
             cedula: cedula?.trim() || undefined,
-            telefono: telefono.trim(),
-            unidad: unidad?.trim() || undefined,
+            telefono: telefono?.trim() || undefined,
+            control: control?.trim() || undefined,
+            placa: placa?.trim() || undefined,
             notas: notas?.trim() || undefined,
             foto_identificacion: foto_identificacion || undefined,
             linea: new mongoose.Types.ObjectId(lineaFinal),

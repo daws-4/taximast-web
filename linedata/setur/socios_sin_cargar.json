@@ -1,0 +1,51 @@
+{
+  "status": "partial_success",
+  "message": "Proceso de importación finalizado",
+  "data": {
+    "total_registros_leidos": 93,
+    "importados_con_exito": 90,
+    "errores_totales": 3,
+    "lista_errores": [
+      {
+        "fila": 16,
+        "error": "Aviso: Cargado sin teléfono",
+        "nombre": "ANTONIO JOSE ESLAVA CALA"
+      },
+      {
+        "fila": 23,
+        "error": "Aviso: Cargado sin teléfono",
+        "nombre": "EDGAR ALEXANDER ARENAS CARRILLO"
+      },
+      {
+        "fila": 53,
+        "error": "Importación denegada: Falta Nombre",
+        "telefono_crudo": "584166732226"
+      },
+      {
+        "fila": 56,
+        "error": "Aviso: Cargado sin teléfono",
+        "nombre": "YORDAN URIEL PEREZ LARA"
+      },
+      {
+        "fila": 65,
+        "error": "Aviso: Cargado sin teléfono",
+        "nombre": "FRANKLIN YHOBANY MEDINA PERNIA"
+      },
+      {
+        "fila": 66,
+        "error": "Aviso: Cargado sin teléfono",
+        "nombre": "JESUS ALONSO RAMIREZ VALERO"
+      },
+      {
+        "fila": 82,
+        "error": "Importación denegada: Falta Nombre",
+        "telefono_crudo": "584147868694"
+      },
+      {
+        "fila": 88,
+        "error": "Importación denegada: Falta Nombre",
+        "telefono_crudo": ""
+      }
+    ]
+  }
+}

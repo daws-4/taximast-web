@@ -7,8 +7,9 @@ export interface IConductor extends Document {
     linea: mongoose.Types.ObjectId;
     nombre: string;
     cedula?: string;
-    telefono: string;
-    unidad?: string;
+    telefono?: string;
+    control?: string;
+    placa?: string;
     foto_identificacion?: string;
     activo: boolean;
     notas?: string;
@@ -36,14 +37,18 @@ const ConductoresSchema = new mongoose.Schema<IConductor>(
             type: String,
             trim: true,
         },
-        // Número de WhatsApp del conductor (formato E.164)
+        // Número de WhatsApp del conductor (formato E.164) - Opcional según nueva directriz
         telefono: {
             type: String,
-            required: true,
             trim: true,
         },
-        // Número o placa de la unidad asignada
-        unidad: {
+        // Número de control asignado
+        control: {
+            type: String,
+            trim: true,
+        },
+        // Número de placa del vehículo
+        placa: {
             type: String,
             trim: true,
         },
@@ -65,8 +70,10 @@ const ConductoresSchema = new mongoose.Schema<IConductor>(
     { timestamps: true }
 );
 
-// Índice compuesto: un teléfono solo puede estar una vez por línea
-ConductoresSchema.index({ linea: 1, telefono: 1 }, { unique: true });
+// Índice compuesto: la cédula es el identificador único por línea para permitir socios sin teléfono
+ConductoresSchema.index({ linea: 1, cedula: 1 }, { unique: true });
+// Índice para búsquedas por teléfono (no único para permitir múltiples vacíos o duplicados temporales)
+ConductoresSchema.index({ linea: 1, telefono: 1 });
 // Índice para listar conductores activos de una línea
 ConductoresSchema.index({ linea: 1, activo: 1 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { JWTPayload } from "@/lib/auth";
 
 const C = {
@@ -15,8 +16,9 @@ interface Conductor {
     _id: string;
     nombre: string;
     cedula?: string;
-    telefono: string;
-    unidad?: string;
+    telefono?: string;
+    control?: string;
+    placa?: string;
     foto_identificacion?: string;
     activo: boolean;
     notas?: string;
@@ -40,6 +42,7 @@ export default function ConductoresClient({ user }: Props) {
     const [editConductor, setEditConductor] = useState<Conductor | null>(null);
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
+    const [filterLinea, setFilterLinea] = useState("");
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
     const isReadOnly = user.rol === "operador";
@@ -48,7 +51,8 @@ export default function ConductoresClient({ user }: Props) {
     const [fNombre, setFNombre] = useState("");
     const [fCedula, setFCedula] = useState("");
     const [fTelefono, setFTelefono] = useState("");
-    const [fUnidad, setFUnidad] = useState("");
+    const [fControl, setFControl] = useState("");
+    const [fPlaca, setFPlaca] = useState("");
     const [fNotas, setFNotas] = useState("");
     const [fLinea, setFLinea] = useState("");
     const [fFoto, setFFoto] = useState<File | null>(null);
@@ -81,7 +85,8 @@ export default function ConductoresClient({ user }: Props) {
         setFNombre("");
         setFCedula("");
         setFTelefono("");
-        setFUnidad("");
+        setFControl("");
+        setFPlaca("");
         setFNotas("");
         setFLinea(user.rol === "admin_linea" ? user.linea || "" : "");
         setFFoto(null);
@@ -93,8 +98,9 @@ export default function ConductoresClient({ user }: Props) {
         setEditConductor(c);
         setFNombre(c.nombre);
         setFCedula(c.cedula || "");
-        setFTelefono(c.telefono);
-        setFUnidad(c.unidad || "");
+        setFTelefono(c.telefono || "");
+        setFControl(c.control || "");
+        setFPlaca(c.placa || "");
         setFNotas(c.notas || "");
         setFLinea(c.linea?._id || "");
         setFFoto(null);
@@ -163,7 +169,7 @@ export default function ConductoresClient({ user }: Props) {
     };
 
     const handleSave = async () => {
-        if (!fNombre.trim() || !fTelefono.trim()) return;
+        if (!fNombre.trim()) return;
         setSaving(true);
 
         try {
@@ -184,8 +190,9 @@ export default function ConductoresClient({ user }: Props) {
             const body = {
                 nombre: fNombre.trim(),
                 cedula: fCedula.trim() || undefined,
-                telefono: fTelefono.trim(),
-                unidad: fUnidad.trim() || undefined,
+                telefono: fTelefono.trim() || undefined,
+                control: fControl.trim() || undefined,
+                placa: fPlaca.trim() || undefined,
                 notas: fNotas.trim() || undefined,
                 foto_identificacion: fotoUrl || undefined,
                 ...(user.rol === "admin" ? { linea: fLinea } : {}),
@@ -230,19 +237,38 @@ export default function ConductoresClient({ user }: Props) {
     };
 
     const filtered = conductores.filter((c) => {
+        // Filtro por línea
+        if (filterLinea && c.linea?._id !== filterLinea) return false;
+
         if (!search) return true;
         const q = search.toLowerCase();
         return (
             c.nombre.toLowerCase().includes(q) ||
-            c.telefono.includes(q) ||
-            c.cedula?.toLowerCase().includes(q) ||
-            c.unidad?.toLowerCase().includes(q)
+            c.telefono?.includes(q) ||
+            c.control?.toLowerCase().includes(q) ||
+            c.placa?.toLowerCase().includes(q) ||
+            c.cedula?.toLowerCase().includes(q)
         );
+    }).sort((a, b) => {
+        // Orden natural: maneja "1", "2", "10" correctamente en lugar de "1", "10", "2"
+        const uA = a.control || "";
+        const uB = b.control || "";
+        return uA.localeCompare(uB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     return (
         <div className="min-h-screen px-4 sm:px-8 py-8" style={{ backgroundColor: C.onyx, color: C.platinum }}>
             {/* Header */}
+            <div className="mb-6">
+                <Link 
+                    href="/dashboard" 
+                    className="text-sm flex items-center gap-2 hover:opacity-80 transition-opacity"
+                    style={{ color: `${C.platinum}77` }}
+                >
+                    ← Volver al Panel
+                </Link>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 <div>
                     <h1 className="text-2xl font-bold" style={{ color: C.brightGold }}>🚕 Conductores</h1>
@@ -261,20 +287,38 @@ export default function ConductoresClient({ user }: Props) {
                 )}
             </div>
 
-            {/* Search */}
-            <div className="mb-6">
+            {/* Search and Filter */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <input
                     type="text"
-                    placeholder="Buscar por nombre, teléfono, cédula o unidad..."
+                    placeholder="Buscar por nombre, teléfono, cédula, control o placa..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full sm:max-w-md px-4 py-2.5 rounded-xl text-sm outline-none border"
+                    className="w-full lg:w-1/4 px-4 py-2.5 rounded-xl text-sm outline-none border"
                     style={{
                         backgroundColor: `${C.jetBlack}`,
                         borderColor: `${C.platinum}15`,
                         color: C.platinum,
                     }}
                 />
+                
+                {user.rol === "admin" && (
+                    <select
+                        value={filterLinea}
+                        onChange={(e) => setFilterLinea(e.target.value)}
+                        className="px-4 py-2.5 rounded-xl text-sm outline-none border cursor-pointer min-w-[200px]"
+                        style={{
+                            backgroundColor: `${C.jetBlack}`,
+                            borderColor: `${C.platinum}15`,
+                            color: C.platinum,
+                        }}
+                    >
+                        <option value="">Todas las líneas</option>
+                        {lineas.map(l => (
+                            <option key={l._id} value={l._id}>{l.name}</option>
+                        ))}
+                    </select>
+                )}
             </div>
 
             {/* Table */}
@@ -296,7 +340,8 @@ export default function ConductoresClient({ user }: Props) {
                                 <th className="text-left px-4 py-3 font-semibold" style={{ color: `${C.platinum}88` }}>Nombre</th>
                                 <th className="text-left px-4 py-3 font-semibold hidden sm:table-cell" style={{ color: `${C.platinum}88` }}>Cédula</th>
                                 <th className="text-left px-4 py-3 font-semibold" style={{ color: `${C.platinum}88` }}>Teléfono</th>
-                                <th className="text-left px-4 py-3 font-semibold hidden md:table-cell" style={{ color: `${C.platinum}88` }}>Unidad</th>
+                                <th className="text-left px-4 py-3 font-semibold hidden md:table-cell" style={{ color: `${C.platinum}88` }}>Control</th>
+                                <th className="text-left px-4 py-3 font-semibold hidden md:table-cell" style={{ color: `${C.platinum}88` }}>Placa</th>
                                 {user.rol === "admin" && (
                                     <th className="text-left px-4 py-3 font-semibold hidden lg:table-cell" style={{ color: `${C.platinum}88` }}>Línea</th>
                                 )}
@@ -334,8 +379,9 @@ export default function ConductoresClient({ user }: Props) {
                                     </td>
                                     <td className="px-4 py-3 font-medium">{c.nombre}</td>
                                     <td className="px-4 py-3 hidden sm:table-cell" style={{ color: `${C.platinum}66` }}>{c.cedula || "—"}</td>
-                                    <td className="px-4 py-3" style={{ color: `${C.platinum}88` }}>{c.telefono}</td>
-                                    <td className="px-4 py-3 hidden md:table-cell" style={{ color: C.saffron }}>{c.unidad || "—"}</td>
+                                    <td className="px-4 py-3" style={{ color: `${C.platinum}88` }}>{c.telefono || "—"}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell" style={{ color: C.saffron }}>{c.control || "—"}</td>
+                                    <td className="px-4 py-3 hidden md:table-cell" style={{ color: `${C.platinum}66` }}>{c.placa || "—"}</td>
                                     {user.rol === "admin" && (
                                         <td className="px-4 py-3 hidden lg:table-cell" style={{ color: `${C.platinum}66` }}>{c.linea?.name || "—"}</td>
                                     )}
@@ -474,28 +520,42 @@ export default function ConductoresClient({ user }: Props) {
                             {/* Teléfono */}
                             <div>
                                 <label className="text-xs font-medium mb-1 block" style={{ color: `${C.platinum}88` }}>
-                                    Teléfono (WhatsApp) *
+                                    Teléfono (WhatsApp)
                                 </label>
                                 <input
                                     value={fTelefono}
                                     onChange={(e) => setFTelefono(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
                                     style={{ backgroundColor: `${C.onyx}`, borderColor: `${C.platinum}15`, color: C.platinum }}
-                                    placeholder="Ej: 584121234567"
+                                    placeholder="Ej: 584121234567 (opcional)"
                                 />
                             </div>
 
-                            {/* Unidad */}
+                            {/* Control */}
                             <div>
                                 <label className="text-xs font-medium mb-1 block" style={{ color: `${C.platinum}88` }}>
-                                    Unidad / Placa
+                                    Número de Control
                                 </label>
                                 <input
-                                    value={fUnidad}
-                                    onChange={(e) => setFUnidad(e.target.value)}
+                                    value={fControl}
+                                    onChange={(e) => setFControl(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
                                     style={{ backgroundColor: `${C.onyx}`, borderColor: `${C.platinum}15`, color: C.platinum }}
-                                    placeholder="Ej: Unidad 15 / ABC-123"
+                                    placeholder="Ej: 015"
+                                />
+                            </div>
+
+                            {/* Placa */}
+                            <div>
+                                <label className="text-xs font-medium mb-1 block" style={{ color: `${C.platinum}88` }}>
+                                    Placa del Vehículo
+                                </label>
+                                <input
+                                    value={fPlaca}
+                                    onChange={(e) => setFPlaca(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg text-sm outline-none border"
+                                    style={{ backgroundColor: `${C.onyx}`, borderColor: `${C.platinum}15`, color: C.platinum }}
+                                    placeholder="Ej: ABC-123"
                                 />
                             </div>
 
@@ -546,7 +606,7 @@ export default function ConductoresClient({ user }: Props) {
                             </button>
                             <button
                                 onClick={handleSave}
-                                disabled={saving || !fNombre.trim() || !fTelefono.trim()}
+                                disabled={saving || !fNombre.trim()}
                                 className="px-5 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
                                 style={{ backgroundColor: C.brightGold, color: C.onyx }}
                             >

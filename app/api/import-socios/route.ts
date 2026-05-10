@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import { connectDB } from "@/lib/db";
 import ConductoresModel from "@/models/Conductores";
+import { withAuth, getUserFromRequest } from "@/lib/auth";
 
 /**
  * Script de importación de socios desde CSV.
@@ -10,10 +11,15 @@ import ConductoresModel from "@/models/Conductores";
 
 // ID de la línea hardcodeado. 
 // IMPORTANTE: Cambia este ID por el ID real de la línea a la que pertenecen estos socios.
-const LINEA_ID = "663919c7f1a3b1a2c3d4e5f6"; 
+const LINEA_ID = "69fb5204f56b0285976f887f"; 
 
-export async function GET() {
+async function importHandler(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        if (!user || user.rol !== "admin") {
+            return NextResponse.json({ ok: false, error: "No autorizado. Solo super admins pueden ejecutar esta ruta." }, { status: 403 });
+        }
+
         await connectDB();
 
         // Ruta absoluta al archivo CSV
@@ -32,7 +38,7 @@ export async function GET() {
         
         let successCount = 0;
         let errorCount = 0;
-        const processedRows = [];
+        const errors: any[] = [];
 
         // Función simple para parsear una línea de CSV respetando comillas
         const parseCSVLine = (text: string) => {
@@ -54,22 +60,18 @@ export async function GET() {
             return result;
         };
 
-        for (const line of dataLines) {
+        for (let i = 0; i < dataLines.length; i++) {
+            const line = dataLines[i];
             if (!line.trim()) continue;
 
             const fields = parseCSVLine(line);
 
-            // Mapeo según la estructura identificada:
-            // index 1: CODISOCI (Cédula)
-            // index 2: NOMBSOCI (Nombre)
-            // index 3: APELSOCI (Apellido)
-            // index 7: TELESOCI (Teléfono)
-            // index 25: STATSOCIO (Activo si es "1")
-            // index 26: OBSESOCI (Notas)
-            // index 28: UNIDASIG (Unidad)
-
             if (fields.length < 29) {
-                console.warn(`Línea con campos insuficientes (${fields.length}): ${line}`);
+                errors.push({ 
+                    fila: i + 2, 
+                    error: "Campos insuficientes", 
+                    datos: line.substring(0, 50) + "..." 
+                });
                 errorCount++;
                 continue;
             }
@@ -92,40 +94,63 @@ export async function GET() {
                 }
             }
 
-            if (!telefono || !nombre) {
+            if (!nombre) {
+                // REGLA: Si NO tiene nombre, no se carga (aunque tenga teléfono)
+                errors.push({ 
+                    fila: i + 2, 
+                    error: "Importación denegada: Falta Nombre", 
+                    telefono_crudo: fields[7] 
+                });
                 errorCount++;
                 continue;
             }
 
+            if (!telefono) {
+                // REGLA: Si tiene nombre pero NO tiene teléfono, se reporta pero SE CARGA
+                errors.push({ 
+                    fila: i + 2, 
+                    error: "Aviso: Cargado sin teléfono", 
+                    nombre 
+                });
+            }
+
             try {
-                // Upsert: Actualiza si existe (por línea y teléfono), crea si no.
+                // Upsert: Usamos la CÉDULA (CODISOCI) como clave única para permitir actualizaciones
+                // incluso si el teléfono está vacío o cambia.
                 await ConductoresModel.findOneAndUpdate(
-                    { linea: LINEA_ID, telefono: telefono },
+                    { linea: LINEA_ID, cedula: cedula },
                     {
                         nombre,
                         cedula,
-                        telefono,
-                        unidad: unidad || undefined,
+                        telefono: telefono || undefined,
+                        control: unidad || undefined, // Mapeado desde UNIDASIG
+                        placa: undefined,
                         notas,
                         activo,
                         linea: LINEA_ID
                     },
-                    { upsert: true, new: true }
+                    { upsert: true, returnDocument: 'after' }
                 );
                 successCount++;
             } catch (err: any) {
-                console.error(`Error importando a ${nombre}:`, err.message);
+                errors.push({ 
+                    fila: i + 2, 
+                    error: `Error de DB: ${err.message}`, 
+                    nombre, 
+                    cedula 
+                });
                 errorCount++;
             }
         }
 
         return NextResponse.json({
-            status: "success",
+            status: errorCount > 0 ? "partial_success" : "success",
             message: "Proceso de importación finalizado",
             data: {
                 total_registros_leidos: dataLines.length,
                 importados_con_exito: successCount,
-                errores_o_saltados: errorCount
+                errores_totales: errorCount,
+                lista_errores: errors
             }
         });
 
@@ -137,3 +162,5 @@ export async function GET() {
         }, { status: 500 });
     }
 }
+
+export const GET = withAuth(importHandler);
