@@ -98,6 +98,23 @@ export async function POST(req: NextRequest) {
         if (type === 'dispatch_driver') {
             // Eliminar cualquier enlace de Google Maps y la " A " ocasional que lo precede
             finalMessage = finalMessage.replace(/\s*(?:A\s+)?https?:\/\/(?:www\.)?(?:maps\.google\.com|goo\.gl|maps\.app\.goo\.gl)[^\s]*/gi, '').trim();
+
+            // 3.0 RESTRICCIÓN TELEGRAM: Validar que el chófer exista si la plataforma es Telegram
+            const driverPhoneVariants = getPhoneVariants(phone);
+            const conductorRecord = await ConductoresModel.findOne({
+                telefono: { $in: driverPhoneVariants },
+                linea: linea._id,
+            }).lean();
+
+            if (conductorRecord) {
+                conductorId = conductorRecord._id as mongoose.Types.ObjectId;
+            } else if (dispatchPlatform === 'telegram') {
+                console.log(`[dispatch-telegram] Envío cancelado: Chófer ${phone} no registrado.`);
+                return NextResponse.json({ 
+                    success: false, 
+                    error: 'Despacho denegado: El chófer no está registrado en el sistema para recibir mensajes por Telegram.' 
+                }, { status: 403 });
+            }
         }
 
         if (type === 'dispatch_client') {
@@ -237,17 +254,6 @@ export async function POST(req: NextRequest) {
         };
 
         const destinatarioNombre = type === 'dispatch_client' ? client?.name : driver?.name;
-
-        if (type === 'dispatch_driver' && phone) {
-            const driverPhoneVariants = getPhoneVariants(phone);
-            const conductorQuery = await ConductoresModel.findOne({
-                telefono: { $in: driverPhoneVariants },
-                linea: linea._id,
-            }).lean();
-            if (conductorQuery) {
-                conductorId = conductorQuery._id as mongoose.Types.ObjectId;
-            }
-        }
 
         let chat = await ChatsModel.findOne({ linea: lineaId, cliente_phone: destPhone, platform: dispatchPlatform });
         
