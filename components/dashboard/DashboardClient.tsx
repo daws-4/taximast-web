@@ -145,13 +145,13 @@ function NewChatModal({ onClose }: { onClose: () => void }) {
         setLoading(true);
         try {
             if (mensaje.trim()) {
-                await fetch("/api/whatsapp/send", {
+                await fetch("/api/send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ phone: clean, message: mensaje.trim(), type: "text" }),
+                    body: JSON.stringify({ platform: "whatsapp", phone: clean, message: mensaje.trim(), type: "text" }),
                 });
             }
-            router.push(`/chat/${clean.replace("+", "")}`);
+            router.push(`/chat/whatsapp?search=${clean.replace("+", "")}`);
         } catch {
             setError("No se pudo iniciar la conversación.");
             setLoading(false);
@@ -571,8 +571,8 @@ export default function DashboardClient({ user }: DashboardClientProps) {
                     <div className="rounded-xl p-6 border border-white/5 shadow-md flex flex-col gap-3" style={{ backgroundColor: `${C.jetBlack}cc` }}>
                         <h2 className="font-semibold text-sm" style={{ color: C.platinum }}>Acciones rápidas</h2>
                         <div className="flex flex-col gap-2 mt-1">
-                            <QuickAction label="Nueva conversación" icon={<ChatIcon className="w-4 h-4" />} onClick={() => setModal("chat")} />
-                            <QuickAction label="Ir a chats" icon={<ChatIcon className="w-4 h-4" />} onClick={() => router.push("/chat")} />
+                            <QuickAction label="Chats de WhatsApp" icon={<ChatIcon className="w-4 h-4" />} onClick={() => router.push("/chat/whatsapp")} />
+                            <QuickAction label="Chats de Telegram" icon={<ChatIcon className="w-4 h-4" />} onClick={() => router.push("/chat/telegram")} />
 
                             {/* Estado de turno — operador y admin_linea */}
                             {user.rol !== "admin" && (

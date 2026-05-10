@@ -14,6 +14,7 @@ async function getHandler(req: NextRequest) {
     const { searchParams } = req.nextUrl;
     const lineaFilter = searchParams.get("linea");   // solo admin puede usarlo
     const estadoFilter = searchParams.get("estado");
+    const platformFilter = searchParams.get("platform");
     const q = searchParams.get("q")?.trim();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,17 +31,33 @@ async function getHandler(req: NextRequest) {
 
     // ── Filtros opcionales ─────────────────────────────────────────────────────
     if (estadoFilter) filtro.estado = estadoFilter;
+    if (platformFilter) {
+        if (platformFilter === "whatsapp") {
+            // Retrocompatibilidad: chats antiguos no tienen campo platform
+            filtro.$or = [{ platform: "whatsapp" }, { platform: { $exists: false } }];
+        } else {
+            filtro.platform = platformFilter;
+        }
+    }
 
     if (q) {
-        filtro.$or = [
+        const searchOr = [
             { cliente_phone: { $regex: q, $options: "i" } },
             { cliente_nombre: { $regex: q, $options: "i" } },
         ];
+        
+        if (filtro.$or) {
+            // Combine with existing $or (from platform fallback)
+            filtro.$and = [{ $or: filtro.$or }, { $or: searchOr }];
+            delete filtro.$or;
+        } else {
+            filtro.$or = searchOr;
+        }
     }
 
     try {
         const chats = await ChatsModel.find(filtro)
-            .select("linea operador cliente_phone cliente_nombre estado ultimoMensaje createdAt tipo_chat conductor")
+            .select("linea operador cliente_phone cliente_nombre estado ultimoMensaje createdAt tipo_chat conductor platform")
             .populate("linea", "name")
             .populate("operador", "nombre apellido")
             .populate("conductor", "nombre telefono unidad foto_identificacion")
@@ -64,7 +81,7 @@ async function postHandler(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
-    const { cliente_phone, cliente_nombre, lineaId } = body;
+    const { cliente_phone, cliente_nombre, lineaId, platform } = body;
 
     if (!cliente_phone) {
         return NextResponse.json({ ok: false, error: "cliente_phone es requerido" }, { status: 400 });
@@ -81,10 +98,24 @@ async function postHandler(req: NextRequest) {
         const linea = await LineasModel.findById(resolvedLinea).select("_id name").lean();
         if (!linea) return NextResponse.json({ ok: false, error: "Línea no encontrada" }, { status: 404 });
 
+        // Normalizar número según plataforma:
+        // Telegram → con '+' (formato internacional completo)
+        // WhatsApp → solo dígitos (sin '+')
+        const resolvedPlatform = platform || "whatsapp";
+        let normalizedPhone = cliente_phone.trim().replace(/[^\d+]/g, "");
+        if (resolvedPlatform === "telegram") {
+            // Asegurar que tenga el '+' al inicio
+            if (!normalizedPhone.startsWith("+")) normalizedPhone = "+" + normalizedPhone.replace(/\D/g, "");
+        } else {
+            // WhatsApp: solo dígitos
+            normalizedPhone = normalizedPhone.replace(/\D/g, "");
+        }
+
         const chat = await ChatsModel.create({
             linea: resolvedLinea,
-            cliente_phone: cliente_phone.trim(),
+            cliente_phone: normalizedPhone,
             cliente_nombre: cliente_nombre?.trim(),
+            platform: resolvedPlatform,
             estado: "en_atencion",
         });
 
@@ -97,8 +128,9 @@ async function postHandler(req: NextRequest) {
                 cliente_nombre: chat.cliente_nombre,
                 estado: chat.estado,
                 ultimoMensaje: chat.ultimoMensaje,
+                platform: chat.platform,
             };
-            global.io.to(`linea:${resolvedLinea}`).emit("chat:nuevo_chat", payload);
+            global.io.to(`linea:${resolvedLinea}`).to("linea:admin").emit("chat:nuevo_chat", payload);
         }
 
         return NextResponse.json({ ok: true, data: chat }, { status: 201 });
@@ -109,6 +141,7 @@ async function postHandler(req: NextRequest) {
             const existing = await ChatsModel.findOne({
                 linea: resolvedLinea,
                 cliente_phone: cliente_phone.trim(),
+                platform: platform || "whatsapp"
             }).lean();
             return NextResponse.json({ ok: true, data: existing, exists: true });
         }

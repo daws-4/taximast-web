@@ -20,7 +20,7 @@ export async function getGeminiReply({ apiKey, lineaName, chatHistoria, clienteN
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
         
-        // Use gemini-2.5-flash as the default model for text/chat (fastest and cheapest for chatbots)
+        // [OFICIAL] Usando gemini-2.5-flash confirmado por el script de diagnóstico
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         // Build the system prompt contextualizing the AI behavior
@@ -52,6 +52,9 @@ El cliente con el que hablas se llama ${clienteName || "Cliente"}.${handoffInstr
             const role: ContentRole = msg.origen === "cliente" ? "user" : "model";
             let text = msg.texto;
             
+            // Ignorar mensajes iniciales que no sean del usuario (Gemini requiere empezar por 'user')
+            if (history.length === 0 && role !== "user") continue;
+
             // Add metadata for multimedia messages to help the AI understand them
             if (msg.tipo && msg.tipo !== "text") {
                 text = `[El usuario envió un ${msg.tipo}. Contenido/Descripción: ${msg.texto || "N/A"}]`;

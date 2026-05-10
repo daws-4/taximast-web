@@ -126,10 +126,10 @@ async function processWebhook(body: Record<string, any>) {
     await connectDB();
 
     // 2. Identificar la línea por phone_number_id
-    const linea = await LineasModel
-        .findOne({ phone_number_id: phoneNumberId })
-        .select('+phone_number_id +access_token +gemini_api_key +gemini_prompt')
-        .lean();
+        const linea = await LineasModel
+            .findOne({ phone_number_id: phoneNumberId })
+            .select('+phone_number_id +access_token +gemini_api_key +gemini_prompt')
+            .lean();
 
     if (!linea) {
         console.warn(`[webhook] Ninguna línea encontrada para phone_number_id=${phoneNumberId}. Asegúrate de que el ID coincide en la base de datos.`);
@@ -320,10 +320,11 @@ async function processWebhook(body: Record<string, any>) {
         // y el chat NO está siendo atendido por un humano.
         let aiReplied = false;
         const isConductorChat = chat.tipo_chat === 'conductor';
-        if (linea.gemini_api_key && !isConductorChat && chat.estado !== 'en_atencion') {
+        const iaHabilitada = linea.gemini_api_key && linea.ia_activa !== false;
+        if (iaHabilitada && !isConductorChat && chat.estado !== 'en_atencion') {
             console.log(`[gemini] Generando respuesta para ${clientePhone}...`);
             const aiResult = await getGeminiReply({
-                apiKey: linea.gemini_api_key,
+                apiKey: linea.gemini_api_key!,
                 lineaName: linea.name,
                 // Si el chat fue reabierto desde "cerrado", solo pasar el último mensaje
                 // para que la IA inicie una conversación completamente nueva

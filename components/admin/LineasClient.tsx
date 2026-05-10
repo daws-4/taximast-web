@@ -22,6 +22,15 @@ interface Linea {
     app_secret?: string;
     activa: boolean;
     gemini_prompt?: string;
+    telegram_api_id?: number;
+    telegram_api_hash?: string;
+    telegram_session?: string;
+    telegram_phone?: string;
+    isWhatsappConfigured?: boolean;
+    isTelegramConfigured?: boolean;
+    plataforma_despacho?: 'whatsapp' | 'telegram';
+    ia_activa?: boolean;
+    has_gemini_key?: boolean; // El backend nos indica si hay clave sin exponer el valor
 }
 
 interface Props {
@@ -213,6 +222,12 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
         app_secret: "",
         gemini_api_key: "",
         gemini_prompt: linea.gemini_prompt || "",
+        telegram_api_id: linea.telegram_api_id || "",
+        telegram_api_hash: linea.telegram_api_hash || "",
+        telegram_session: linea.telegram_session || "",
+        telegram_phone: linea.telegram_phone || "",
+        plataforma_despacho: linea.plataforma_despacho || "whatsapp",
+        ia_activa: linea.ia_activa ?? true,
         activa: linea.activa
     });
 
@@ -224,7 +239,7 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
     const [tokenStatus, setTokenStatus] = useState<TokenStatus>("idle");
     const [tokenMsg, setTokenMsg] = useState("");
 
-    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
+    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
     const setCredentialField = (k: "access_token" | "phone_number_id") => (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [k]: e.target.value }));
         setTokenStatus("idle");
@@ -277,10 +292,10 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
         // Omitimos los campos en blanco para que el backend no los sobreescriba (conserva los originales)
         const payload: Partial<typeof form> = {};
         for (const [k, v] of Object.entries(form)) {
-            if (v !== "" && v !== undefined && k !== "activa") {
+            if (v !== "" && v !== undefined && k !== "activa" && k !== "ia_activa") {
                 payload[k as keyof typeof form] = v as never;
-            } else if (k === "activa") {
-                payload.activa = v as boolean;
+            } else if (k === "activa" || k === "ia_activa") {
+                payload[k as keyof typeof form] = v as never;
             }
         }
 
@@ -328,6 +343,20 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
                     <span className="text-sm" style={{ color: C.platinum }}>Línea Operativa (Activa)</span>
                 </label>
 
+                <div className="flex flex-col gap-1 mt-2">
+                    <label htmlFor="edit-plataforma-despacho" className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>Canal de mensajería principal (Despachos)</label>
+                    <select
+                        id="edit-plataforma-despacho"
+                        value={form.plataforma_despacho}
+                        onChange={set("plataforma_despacho")}
+                        className="w-full px-3 py-2 rounded-lg text-sm border outline-none transition-colors"
+                        style={{ backgroundColor: `${C.onyx}99`, borderColor: `${C.platinum}22`, color: C.platinum }}
+                    >
+                        <option value="whatsapp" disabled={!linea.isWhatsappConfigured}>WhatsApp {!linea.isWhatsappConfigured && "(Faltan credenciales completas)"}</option>
+                        <option value="telegram" disabled={!linea.isTelegramConfigured}>Telegram {!linea.isTelegramConfigured && "(Faltan credenciales completas)"}</option>
+                    </select>
+                </div>
+
                 <div className="border-t border-white/5 pt-3 flex flex-col gap-1 mt-2">
                     <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.saffron }}>Actualizar Credenciales de Meta</p>
                     <p className="text-xs mb-3" style={{ color: `${C.platinum}66` }}>
@@ -374,7 +403,44 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
                         <Field label="Nuevo App Secret (Meta App)" id="edit-linea-secret" type="password" value={form.app_secret} onChange={set("app_secret")} placeholder="Solo si vas a cambiarlo" />
 
                         <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#3b82f6" }}>Telegram (MTProto)</p>
+                            <Field label="API ID (Telegram)" id="edit-linea-tg-id" type="number" value={form.telegram_api_id} onChange={set("telegram_api_id")} placeholder="Solo si vas a cambiarlo" />
+                            <Field label="API Hash (Telegram)" id="edit-linea-tg-hash" type="password" value={form.telegram_api_hash} onChange={set("telegram_api_hash")} placeholder="Solo si vas a cambiarlo" />
+                            <Field label="Teléfono de la cuenta Telegram" id="edit-linea-tg-phone" value={form.telegram_phone} onChange={set("telegram_phone")} placeholder="Ej: +58424... (Opcional si usas solo WhatsApp)" />
+                            <Field label="String Session (Generado con script tg_auth)" id="edit-linea-tg-session" type="password" value={form.telegram_session} onChange={set("telegram_session")} placeholder="Solo si vas a cambiarlo" />
+                            <p className="text-[10px] mt-1 mb-3" style={{ color: `${C.platinum}66` }}>Las credenciales de Telegram requieren reiniciar el servidor para iniciar la conexión persistente.</p>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-white/5">
                             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
+                            
+                            {/* Toggle ia_activa */}
+                            <div className="flex items-center gap-3 p-3 rounded-lg mb-3" style={{ backgroundColor: `${C.onyx}80`, border: `1px solid ${form.ia_activa ? '#4ade8033' : '#94a3b833'}` }}>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium" style={{ color: linea.has_gemini_key ? C.platinum : `${C.platinum}44` }}>Agente de IA activo</p>
+                                    <p className="text-[10px] mt-0.5" style={{ color: `${C.platinum}55` }}>
+                                        {!linea.has_gemini_key 
+                                            ? 'Requiere una API Key de Gemini para activarse.' 
+                                            : form.ia_activa 
+                                                ? 'El asistente responderá automáticamente a los clientes.'
+                                                : 'El asistente está desactivado. Los mensajes irán a esperando operador.'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={!linea.has_gemini_key}
+                                    onClick={() => setForm(f => ({ ...f, ia_activa: !f.ia_activa }))}
+                                    className="relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    style={{ backgroundColor: (linea.has_gemini_key && form.ia_activa) ? '#4ade80' : `${C.platinum}22` }}
+                                    title={!linea.has_gemini_key ? 'Configura una API Key primero' : ''}
+                                >
+                                    <span
+                                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                        style={{ transform: (linea.has_gemini_key && form.ia_activa) ? 'translateX(20px)' : 'translateX(0)' }}
+                                    />
+                                </button>
+                            </div>
+
                             <Field label="Nueva API Key de Google Gemini" id="edit-linea-gemini" type="password" value={form.gemini_api_key} onChange={set("gemini_api_key")} placeholder="AIzaSy..." />
                             <p className="text-[10px] mt-1 mb-3" style={{ color: `${C.platinum}66` }}>Dejar en blanco para no cambiarla. Cada línea tiene facturación de cuota independiente.</p>
                             <TextareaField 
@@ -425,7 +491,12 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
 
 // ─── Modal: Nueva Línea ────────────────────────────────────────────────────
 function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-    const [form, setForm] = useState({ name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", app_secret: "", gemini_api_key: "", gemini_prompt: "" });
+    const [form, setForm] = useState({ 
+        name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", app_secret: "", 
+        gemini_api_key: "", gemini_prompt: "",
+        telegram_api_id: "", telegram_api_hash: "", telegram_session: "", telegram_phone: "",
+        plataforma_despacho: "whatsapp"
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -438,7 +509,7 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         setTokenMsg("");
     };
 
-    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+    const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
     async function handleVerify() {
         if (!form.access_token.trim() || !form.phone_number_id.trim()) return;
@@ -472,10 +543,15 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (tokenStatus !== "ok") {
+        // Eliminamos el requisito de verificación para la creación según solicitud: 
+        // "no exija verificar el whatsapp para crearlo, puede estar en blanco"
+        /*
+        const canVerify = form.access_token.trim() !== "" && form.phone_number_id.trim() !== "";
+        if (canVerify && tokenStatus !== "ok") {
             setError("Verifica las credenciales de Meta antes de guardar.");
             return;
         }
+        */
         setError("");
         setLoading(true);
         try {
@@ -497,18 +573,35 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     const tokenColor = { idle: `${C.platinum}44`, loading: C.saffron, ok: "#4ade80", error: "#f87171" }[tokenStatus];
     const canVerify = form.access_token.trim() !== "" && form.phone_number_id.trim() !== "";
 
+    const isWaConfigured = Boolean(form.whatsapp_number && form.phone_number_id && form.waba_id && form.access_token);
+    const isTgConfigured = Boolean(form.telegram_api_id && form.telegram_api_hash);
+
     return (
         <ModalOverlay title="Nueva línea de taxis" onClose={onClose}>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <Field label="Nombre comercial *" id="new-linea-name" value={form.name} onChange={set("name")} placeholder="Ej: Taxi El Llano" required />
-                <Field label="Número de WhatsApp Business *" id="new-linea-wa-number" type="tel" value={form.whatsapp_number} onChange={set("whatsapp_number")} placeholder="+58424..." required />
+                <Field label="Número de WhatsApp Business" id="new-linea-wa-number" type="tel" value={form.whatsapp_number} onChange={set("whatsapp_number")} placeholder="+58424... (Opcional si usas Telegram)" />
+
+                <div className="flex flex-col gap-1 mt-2">
+                    <label htmlFor="new-plataforma-despacho" className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>Canal de mensajería principal (Despachos)</label>
+                    <select
+                        id="new-plataforma-despacho"
+                        value={form.plataforma_despacho}
+                        onChange={set("plataforma_despacho")}
+                        className="w-full px-3 py-2 rounded-lg text-sm border outline-none transition-colors"
+                        style={{ backgroundColor: `${C.onyx}99`, borderColor: `${C.platinum}22`, color: C.platinum }}
+                    >
+                        <option value="whatsapp" disabled={!isWaConfigured}>WhatsApp {!isWaConfigured && "(Faltan credenciales completas)"}</option>
+                        <option value="telegram" disabled={!isTgConfigured}>Telegram {!isTgConfigured && "(Faltan credenciales completas)"}</option>
+                    </select>
+                </div>
 
                 <div className="border-t border-white/5 pt-3 flex flex-col gap-1 mt-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.saffron }}>Credenciales de Meta for Developers</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.saffron }}>Credenciales de Meta for Developers (Opcional)</p>
                     <div className="flex flex-col gap-3">
-                        <Field label="Phone Number ID *" id="new-linea-phone-id" value={form.phone_number_id} onChange={setCredentialField("phone_number_id")} placeholder="Ej: 1234567890" required />
-                        <Field label="WABA ID *" id="new-linea-waba-id" value={form.waba_id} onChange={set("waba_id")} placeholder="WhatsApp Business Account ID" required />
-                        <Field label="Access Token (System User Token) *" id="new-linea-token" type="password" value={form.access_token} onChange={setCredentialField("access_token")} placeholder="EAAxxxxx..." required />
+                        <Field label="Phone Number ID" id="new-linea-phone-id" value={form.phone_number_id} onChange={setCredentialField("phone_number_id")} placeholder="Ej: 1234567890" />
+                        <Field label="WABA ID" id="new-linea-waba-id" value={form.waba_id} onChange={set("waba_id")} placeholder="WhatsApp Business Account ID" />
+                        <Field label="Access Token (System User Token)" id="new-linea-token" type="password" value={form.access_token} onChange={setCredentialField("access_token")} placeholder="EAAxxxxx..." />
 
                         <div className="flex flex-col gap-1.5">
                             <button
@@ -541,7 +634,16 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 
                         <Field label="Verify Token (webhook)" id="new-linea-verify" value={form.verify_token} onChange={set("verify_token")} placeholder="Token de verificación del webhook" />
                         
-                        <Field label="App Secret (Meta App) *" id="new-linea-secret" type="password" value={form.app_secret} onChange={set("app_secret")} placeholder="Secreto de la aplicación de Meta" required />
+                        <Field label="App Secret (Meta App)" id="new-linea-secret" type="password" value={form.app_secret} onChange={set("app_secret")} placeholder="Secreto de la aplicación de Meta" />
+
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#3b82f6" }}>Telegram (MTProto)</p>
+                            <Field label="API ID (Telegram)" id="new-linea-tg-id" type="number" value={form.telegram_api_id} onChange={set("telegram_api_id")} placeholder="12345678" />
+                            <Field label="API Hash (Telegram)" id="new-linea-tg-hash" type="password" value={form.telegram_api_hash} onChange={set("telegram_api_hash")} placeholder="Abcde..." />
+                            <Field label="Teléfono de la cuenta Telegram" id="new-linea-tg-phone" value={form.telegram_phone} onChange={set("telegram_phone")} placeholder="Ej: +58424..." />
+                            <Field label="String Session (Generado con script tg_auth)" id="new-linea-tg-session" type="password" value={form.telegram_session} onChange={set("telegram_session")} placeholder="1AaAbCc..." />
+                            <p className="text-[10px] mt-1 mb-3" style={{ color: `${C.platinum}66` }}>Opcional. Ejecuta `node scripts/tg_auth.mjs` para generar el String Session.</p>
+                        </div>
 
                         <div className="mt-4 pt-3 border-t border-white/5">
                             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#4ade80" }}>Inteligencia Artificial</p>
@@ -565,13 +667,13 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                     </button>
                     <button
                         type="submit"
-                        disabled={loading || tokenStatus !== "ok"}
+                        disabled={loading}
                         className="flex-1 py-2.5 rounded-lg font-semibold text-sm transition-opacity"
                         style={{
                             backgroundColor: C.brightGold,
                             color: C.onyx,
-                            opacity: loading || tokenStatus !== "ok" ? 0.4 : 1,
-                            cursor: loading || tokenStatus !== "ok" ? "not-allowed" : "pointer",
+                            opacity: loading ? 0.4 : 1,
+                            cursor: loading ? "not-allowed" : "pointer",
                         }}
                     >
                         {loading ? "Guardando..." : "Crear línea"}

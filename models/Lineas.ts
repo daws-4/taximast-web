@@ -8,7 +8,15 @@ export interface ILinea extends Document {
     access_token?: string;
     verify_token?: string;
     app_secret?: string; // Secreto de la aplicación de Meta para validación de firma
+    telegram_api_id?: number;
+    telegram_api_hash?: string;
+    telegram_session?: string;
+    telegram_phone?: string;
+    isWhatsappConfigured: boolean;
+    isTelegramConfigured: boolean;
+    plataforma_despacho?: 'whatsapp' | 'telegram';
     ai_provider?: 'ai_studio' | 'vertex_ai';
+    ia_activa?: boolean;
     gemini_api_key?: string;
     gemini_prompt?: string;
     tokens_input_consumed?: number;
@@ -61,11 +69,50 @@ const LineasSchema = new mongoose.Schema<ILinea>(
             trim: true,
             select: false,
         },
+        // ── Telegram MTProto ──────────────────────────────────────────────
+        telegram_api_id: {
+            type: Number,
+            select: false,
+        },
+        telegram_api_hash: {
+            type: String,
+            trim: true,
+            select: false,
+        },
+        telegram_session: {
+            type: String,
+            trim: true,
+            select: false,
+        },
+        telegram_phone: {
+            type: String,
+            trim: true,
+        },
+        // ── Estado de Configuración ─────────────────────────────────────────
+        isWhatsappConfigured: {
+            type: Boolean,
+            default: false,
+        },
+        isTelegramConfigured: {
+            type: Boolean,
+            default: false,
+        },
+        // Plataforma predeterminada para el envío de despachos desde VFP
+        plataforma_despacho: {
+            type: String,
+            enum: ['whatsapp', 'telegram'],
+            default: 'whatsapp',
+        },
         // Proveedor de Inteligencia Artificial
         ai_provider: {
             type: String,
             enum: ['ai_studio', 'vertex_ai'],
             default: 'ai_studio',
+        },
+        // Flag para activar/desactivar la IA independientemente de si hay API Key
+        ia_activa: {
+            type: Boolean,
+            default: true,
         },
         // Clave de API de Google Gemini para procesamiento de IA individual
         gemini_api_key: {
@@ -98,7 +145,9 @@ const LineasSchema = new mongoose.Schema<ILinea>(
     { timestamps: true }
 );
 
-const LineasModel: Model<ILinea> =
-    mongoose.models?.Lineas || mongoose.model<ILinea>("Lineas", LineasSchema);
+if (mongoose.models?.Lineas) {
+    delete mongoose.models.Lineas;
+}
+const LineasModel: Model<ILinea> = mongoose.model<ILinea>("Lineas", LineasSchema);
 
 export default LineasModel;

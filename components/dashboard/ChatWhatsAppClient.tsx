@@ -32,6 +32,7 @@ interface ChatSummary {
     estado: "pendiente" | "bot_atendiendo" | "esperando_operador" | "en_atencion" | "cerrado";
     ultimoMensaje: string;
     tipo_chat?: "cliente" | "conductor";
+    platform?: "whatsapp" | "telegram";
     conductor?: {
         _id: string;
         nombre: string;
@@ -39,6 +40,7 @@ interface ChatSummary {
         unidad?: string;
         foto_identificacion?: string;
     };
+    bloqueado?: boolean;
 }
 
 interface Message {
@@ -128,6 +130,7 @@ function ChatListItem({
                     className="text-sm font-semibold truncate max-w-[140px] flex items-center gap-1.5"
                     style={{ color: selected ? C.brightGold : C.platinum }}
                 >
+                    {chat.platform === 'telegram' ? <span className="text-xs shrink-0" title="Telegram">✈️</span> : <span className="text-xs shrink-0" title="WhatsApp">💬</span>}
                     {chat.tipo_chat === "conductor" && <span className="text-xs shrink-0" title="Chófer">🚕</span>}
                     <span className="truncate">{displayName}</span>
                 </span>
@@ -137,8 +140,8 @@ function ChatListItem({
             </div>
             <div className="flex items-center justify-between gap-2">
                 {showLinea && chat.linea && (
-                    <span className="text-xs truncate" style={{ color: C.saffron }}>
-                        {chat.linea.name}
+                    <span className="text-xs truncate max-w-[120px]" style={{ color: C.saffron }}>
+                        {chat.linea.name.length > 20 ? chat.linea.name.substring(0, 20) + "..." : chat.linea.name}
                     </span>
                 )}
                 <EstadoChip estado={chat.estado} />
@@ -322,6 +325,7 @@ function ConversationPanel({
     const [attachment, setAttachment] = useState<File | null>(null);
     const [sending, setSending] = useState(false);
     const [recording, setRecording] = useState(false);
+    const [showEdit, setShowEdit] = useState(false);
     const [showStickers, setShowStickers] = useState(false);
     const [stickersList, setStickersList] = useState<Sticker[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -503,10 +507,11 @@ function ConversationPanel({
             }
 
             // Despachar el mensaje a través de nuestra API Node
-            await fetch("/api/whatsapp/send", {
+            await fetch(`/api/${chat.platform || "whatsapp"}/send`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    platform: chat.platform || "whatsapp",
                     phone: chat.cliente_phone,
                     message: mediaId || textToSend,
                     caption: mediaId ? textToSend : undefined,
@@ -577,6 +582,7 @@ function ConversationPanel({
                     )}
                     <div>
                         <div className="flex items-center gap-1.5">
+                            {chat.platform === 'telegram' ? <span className="text-sm shrink-0" title="Telegram">✈️</span> : <span className="text-sm shrink-0" title="WhatsApp">💬</span>}
                             <p className="text-sm font-semibold truncate max-w-[180px] sm:max-w-xs" style={{ color: C.platinum }}>
                                 {chat.tipo_chat === "conductor" && chat.conductor ? chat.conductor.nombre : (chat.cliente_nombre || chat.cliente_phone)}
                             </p>
@@ -617,24 +623,71 @@ function ConversationPanel({
                         }}
                         className="text-xs px-2 py-1 rounded-lg border cursor-pointer outline-none"
                         style={{
-                            backgroundColor: `${ESTADO_COLOR[chat.estado] ?? C.platinum}15`,
+                            backgroundColor: C.jetBlack,
                             borderColor: `${ESTADO_COLOR[chat.estado] ?? C.platinum}44`,
                             color: ESTADO_COLOR[chat.estado] ?? C.platinum,
+                            colorScheme: "dark",
                         }}
                     >
-                        <option value="pendiente">🕒 Pendiente</option>
-                        <option value="bot_atendiendo">🤖 Bot atendiendo</option>
-                        <option value="esperando_operador">🔔 Esperando operador</option>
-                        <option value="en_atencion">✅ En atención</option>
-                        <option value="cerrado">🔒 Cerrado</option>
+                        <option value="pendiente" style={{ backgroundColor: C.jetBlack, color: ESTADO_COLOR.pendiente }}>🕒 Pendiente</option>
+                        <option value="bot_atendiendo" style={{ backgroundColor: C.jetBlack, color: ESTADO_COLOR.bot_atendiendo }}>🤖 Bot atendiendo</option>
+                        <option value="esperando_operador" style={{ backgroundColor: C.jetBlack, color: ESTADO_COLOR.esperando_operador }}>🔔 Esperando operador</option>
+                        <option value="en_atencion" style={{ backgroundColor: C.jetBlack, color: ESTADO_COLOR.en_atencion }}>✅ En atención</option>
+                        <option value="cerrado" style={{ backgroundColor: C.jetBlack, color: ESTADO_COLOR.cerrado }}>🔒 Cerrado</option>
                     </select>
                     {chat.linea && (
                         <span className="text-xs hidden sm:block" style={{ color: C.saffron }}>
                             {chat.linea.name}
                         </span>
                     )}
+                    <button
+                        onClick={async () => {
+                            const nuevoBloqueo = !chat.bloqueado;
+                            try {
+                                const res = await fetch(`/api/chats/${chat._id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ bloqueado: nuevoBloqueo }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                    setChat((prev) => prev ? { ...prev, bloqueado: nuevoBloqueo } : prev);
+                                }
+                            } catch (err) {
+                                console.error("Error cambiando exencion:", err);
+                            }
+                        }}
+                        className="p-1.5 rounded-lg transition-colors cursor-pointer hover:bg-white/5"
+                        style={{ color: chat.bloqueado ? "#ef4444" : `${C.platinum}88` }}
+                        title={chat.bloqueado ? "Usuario exento (Haga clic para habilitar)" : "Marcar como exento (No recibirá más mensajes automáticos)"}
+                    >
+                        {chat.bloqueado ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                        ) : (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setShowEdit(true)}
+                        className="p-1.5 rounded-lg transition-colors cursor-pointer hover:bg-white/5"
+                        style={{ color: `${C.platinum}88` }}
+                        title="Editar chat"
+                    >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
                 </div>
             </div>
+
+            {/* Modal de Editar Conversación */}
+            {showEdit && (
+                <EditChatModal 
+                    chat={chat} 
+                    onClose={() => setShowEdit(false)} 
+                    onUpdate={(updatedData) => {
+                        setChat(prev => prev ? { ...prev, ...updatedData } : prev);
+                    }}
+                />
+            )}
 
             {/* Mensajes */}
             <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3 min-h-0">
@@ -816,6 +869,228 @@ function ConversationPanel({
     );
 }
 
+// ─── Componentes auxiliares ──────────────────────────────────────────────────
+function Field({ label, id, ...props }: { label: string; id: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+    return (
+        <div className="flex flex-col gap-1">
+            <label htmlFor={id} className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>{label}</label>
+            <input
+                id={id}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none transition-colors"
+                style={{ backgroundColor: C.onyx, borderColor: `${C.platinum}22`, color: C.platinum }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = `${C.brightGold}44`)}
+                onBlur={(e) => (e.currentTarget.style.borderColor = `${C.platinum}22`)}
+                {...props}
+            />
+        </div>
+    );
+}
+
+function SelectField({ label, id, children, ...props }: { label: string; id: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+    return (
+        <div className="flex flex-col gap-1">
+            <label htmlFor={id} className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>{label}</label>
+            <select
+                id={id}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                style={{ backgroundColor: C.onyx, borderColor: `${C.platinum}22`, color: C.platinum }}
+                {...props}
+            >
+                {children}
+            </select>
+        </div>
+    );
+}
+
+function SubmitBtn({ loading, label }: { loading: boolean; label: string }) {
+    return (
+        <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 rounded-lg font-semibold text-sm transition-opacity cursor-pointer disabled:cursor-not-allowed"
+            style={{ backgroundColor: C.brightGold, color: C.onyx, opacity: loading ? 0.6 : 1 }}
+        >
+            {loading ? "Guardando..." : label}
+        </button>
+    );
+}
+
+// ─── Modal: Nueva conversación ─────────────────────────────────────────────────
+function NewChatModal({ onClose, onSuccess, platform, lineas, isAdmin, userLinea }: { onClose: () => void, onSuccess: (id: string) => void, platform: "whatsapp" | "telegram", lineas: any[], isAdmin: boolean, userLinea?: string }) {
+    const router = useRouter();
+    const [numero, setNumero] = useState("");
+    const [nombre, setNombre] = useState("");
+    const [lineaId, setLineaId] = useState(isAdmin ? "" : (userLinea || ""));
+    const [mensaje, setMensaje] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError("");
+        const clean = numero.replace(/\D/g, "");
+        if (clean.length < 8) {
+            setError("Formato inválido. Ingresa solo números (ej: 584241234567).");
+            return;
+        }
+        if (isAdmin && !lineaId) {
+            setError("Selecciona una línea.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const res = await fetch("/api/chats", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    cliente_phone: clean, 
+                    cliente_nombre: nombre.trim(), 
+                    lineaId, 
+                    platform 
+                }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error);
+
+            if (mensaje.trim()) {
+                await fetch(`/api/${platform}/send`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ phone: clean, message: mensaje.trim(), type: "text", chatId: data.data._id }),
+                });
+            }
+            onSuccess(data.data._id);
+            // La lista se actualizará vía sockets o al re-renderizar
+        } catch (err: any) {
+            setError(err.message || "No se pudo iniciar la conversación.");
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border border-white/10" style={{ backgroundColor: C.jetBlack }}>
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold" style={{ color: C.platinum }}>Nueva conversación ({platform})</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer" style={{ color: C.platinum }}>
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <Field label="Número de teléfono *" id="new-chat-phone" placeholder="584241234567" value={numero} onChange={e => setNumero(e.target.value)} required />
+                    <Field label="Nombre del cliente (Opcional)" id="new-chat-name" placeholder="Ej: Juan Pérez" value={nombre} onChange={e => setNombre(e.target.value)} />
+                    
+                    {isAdmin && (
+                        <SelectField label="Línea *" id="new-chat-linea" value={lineaId} onChange={e => setLineaId(e.target.value)} required>
+                            <option value="">Seleccionar línea...</option>
+                            {lineas.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
+                        </SelectField>
+                    )}
+
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium" style={{ color: `${C.platinum}88` }}>Mensaje inicial (Opcional)</label>
+                        <textarea
+                            className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                            style={{ backgroundColor: C.onyx, borderColor: `${C.platinum}22`, color: C.platinum, minHeight: '80px' }}
+                            placeholder="Escribe un mensaje para iniciar..."
+                            value={mensaje}
+                            onChange={e => setMensaje(e.target.value)}
+                        />
+                    </div>
+
+                    {error && <p className="text-xs font-medium text-center" style={{ color: '#ef4444' }}>{error}</p>}
+                    <div className="mt-2">
+                        <SubmitBtn loading={loading} label="Iniciar conversación" />
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ─── Modal: Editar conversación ────────────────────────────────────────────────
+function EditChatModal({ onClose, chat, onUpdate }: { onClose: () => void, chat: any, onUpdate: (data: any) => void }) {
+    const [nombre, setNombre] = useState(chat.cliente_nombre || "");
+    const [loading, setLoading] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState("");
+
+    async function handleSave(e: React.FormEvent) {
+        e.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/chats/${chat._id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cliente_nombre: nombre.trim() }),
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error);
+            onUpdate({ cliente_nombre: nombre.trim() });
+            onClose();
+        } catch (err: any) {
+            setError(err.message || "Error al actualizar.");
+            setLoading(false);
+        }
+    }
+
+    async function handleDelete() {
+        if (!confirm("¿Seguro que deseas eliminar este chat y todos sus mensajes? Esta acción no se puede deshacer.")) return;
+        setDeleting(true);
+        setError("");
+        try {
+            const res = await fetch(`/api/chats/${chat._id}`, { method: "DELETE" });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error);
+            // El socket emitirá 'chat:eliminado' y la lista principal lo removerá,
+            // pero el panel activo debe cerrarse si se elimina:
+            onClose();
+            // Para forzar el cierre del panel si está montado:
+            // Depende del padre manejar el selectedId = null cuando se elimine en la lista
+        } catch (err: any) {
+            setError(err.message || "Error al eliminar.");
+            setDeleting(false);
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border border-white/10" style={{ backgroundColor: C.jetBlack }}>
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold" style={{ color: C.platinum }}>Editar chat</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer" style={{ color: C.platinum }}>
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <form onSubmit={handleSave} className="flex flex-col gap-4">
+                    <Field label="Número (Solo lectura)" id="edit-chat-phone" value={chat.cliente_phone} disabled />
+                    <Field label="Nombre del cliente" id="edit-chat-name" placeholder="Ej: Juan Pérez" value={nombre} onChange={e => setNombre(e.target.value)} />
+                    
+                    {error && <p className="text-xs font-medium text-center" style={{ color: '#ef4444' }}>{error}</p>}
+                    
+                    <div className="mt-2 flex gap-3">
+                        <button
+                            type="button"
+                            disabled={deleting || loading}
+                            onClick={handleDelete}
+                            className="px-4 py-2.5 rounded-lg font-semibold text-sm transition-opacity cursor-pointer border border-red-500 text-red-500 hover:bg-red-500/10"
+                            style={{ opacity: deleting ? 0.6 : 1 }}
+                        >
+                            {deleting ? "Eliminar" : "Eliminar"}
+                        </button>
+                        <div className="flex-1">
+                            <SubmitBtn loading={loading} label="Guardar" />
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 // ─── Estado vacío del panel derecho ──────────────────────────────────────────
 function EmptyPanel() {
     return (
@@ -849,7 +1124,7 @@ function EmptyPanel() {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ChatPageClient({ user }: { user: JWTPayload }) {
+export default function ChatWhatsAppClient({ user }: { user: JWTPayload }) {
     const router = useRouter();
     const [chats, setChats] = useState<ChatSummary[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -859,6 +1134,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
     const [q, setQ] = useState("");
     const [loadingList, setLoadingList] = useState(true);
     const [mobileShowPanel, setMobileShowPanel] = useState(false);
+    const [showNewChat, setShowNewChat] = useState(false);
     const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const isAdmin = user.rol === "admin";
@@ -867,6 +1143,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
     const fetchChats = useCallback(async (search?: string) => {
         setLoadingList(true);
         const params = new URLSearchParams();
+        params.set("platform", "whatsapp");
         if (lineaFilter) params.set("linea", lineaFilter);
         if (estadoFilter) params.set("estado", estadoFilter);
         if (search) params.set("q", search);
@@ -904,6 +1181,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
 
         const fetchChatsSilent = async () => {
             const params = new URLSearchParams();
+            params.set("platform", "whatsapp");
             if (lineaFilter) params.set("linea", lineaFilter);
             if (estadoFilter) params.set("estado", estadoFilter);
             if (q) params.set("q", q);
@@ -934,18 +1212,23 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
 
         // Nueva conversación → agregar al top de la lista
         const handleNuevoChat = (newChat: ChatSummary) => {
-            setChats((prev) => [newChat, ...prev]);
+            if (newChat.platform === "whatsapp" || !newChat.platform) {
+                setChats((prev) => {
+                    if (prev.some(c => c._id === newChat._id)) return prev;
+                    return [newChat, ...prev];
+                });
+            }
         };
 
         // Estado de un chat cambió
-        const handleEstadoCambiadoList = (payload: { chatId: string; estado: string }) => {
+        const handleEstadoCambiadoList = (payload: { chatId: string; estado: string; cliente_nombre?: string }) => {
             console.log("[ChatPageClient] Recibido socket ESTADO_CAMBIADO:", payload);
             setChats((prev) => {
                 const index = prev.findIndex((c) => c._id === payload.chatId);
                 if (index !== -1) {
                     // Actualizar el estado in-place
                     return prev.map((c) =>
-                        c._id === payload.chatId ? { ...c, estado: payload.estado as ChatSummary["estado"] } : c
+                        c._id === payload.chatId ? { ...c, estado: payload.estado as ChatSummary["estado"], cliente_nombre: payload.cliente_nombre ?? c.cliente_nombre } : c
                     );
                 }
                 
@@ -1001,8 +1284,8 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                     >
                         ← Dashboard
                     </button>
-                    <span className="text-xl font-extrabold tracking-tight" style={{ color: C.brightGold }}>
-                        Chats
+                    <span className="text-xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: C.brightGold }}>
+                        💬 WhatsApp
                     </span>
                     <span
                         className="text-xs font-medium px-2 py-0.5 rounded-full border"
@@ -1035,6 +1318,18 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                     `}
                     style={{ borderColor: `${C.platinum}08`, backgroundColor: `${C.onyx}55` }}
                 >
+                    {/* Botón Nueva Conversación */}
+                    <div className="px-4 py-3 shrink-0">
+                        <button
+                            onClick={() => setShowNewChat(true)}
+                            className="w-full py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-lg"
+                            style={{ backgroundColor: C.brightGold, color: C.onyx }}
+                        >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            Nueva conversación
+                        </button>
+                    </div>
+
                     {/* Filtros */}
                     <div
                         className="px-4 py-3 flex flex-col gap-2 border-b shrink-0"
@@ -1074,7 +1369,7 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                                 color: estadoFilter ? C.platinum : `${C.platinum}66`,
                             }}
                         >
-                            <option value="">Todos los chats</option>
+                            <option value="">Todos los estados</option>
                             <option value="pendiente">🕒 Pendientes</option>
                             <option value="bot_atendiendo">🤖 Bot atendiendo</option>
                             <option value="esperando_operador">🔔 Esperando operador</option>
@@ -1175,6 +1470,22 @@ export default function ChatPageClient({ user }: { user: JWTPayload }) {
                     )}
                 </main>
             </div>
+
+            {/* Modal de Nueva Conversación */}
+            {showNewChat && (
+                <NewChatModal 
+                    onClose={() => setShowNewChat(false)} 
+                    onSuccess={(id) => {
+                        setShowNewChat(false);
+                        setSelectedId(id);
+                        setMobileShowPanel(true);
+                    }}
+                    platform="whatsapp" 
+                    lineas={lineas} 
+                    isAdmin={isAdmin} 
+                    userLinea={user.linea}
+                />
+            )}
         </div>
     );
 }

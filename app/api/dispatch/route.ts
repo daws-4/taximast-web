@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateApiKey } from '@/lib/apiAuth';
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import ChatsModel from '@/models/Chats';
+import ChatsModel, { IMessage } from '@/models/Chats';
 import LineasModel from '@/models/Lineas';
 import ConductoresModel from '@/models/Conductores';
 import { getDriverPhotoUrl } from '@/lib/pocketbase';
@@ -38,12 +39,15 @@ interface DispatchBody {
     client?: DispatchClient;
     conductor?: DispatchDriver;
     cliente?: DispatchClient;
-    // image se ignora intencionalmente
 }
 
-// ── POST /api/whatsapp/dispatch ─────────────────────────────────────────────
+// ── POST /api/dispatch (Endpoint Omnicanal) ─────────────────────────────────
 export async function POST(req: NextRequest) {
     try {
+        // 0. Validar API key enviada por FoxPro en el header x-api-key
+        const authError = validateApiKey(req);
+        if (authError) return authError;
+
         const body: DispatchBody = await req.json();
         const { line_id, phone, message, type = 'general', driver, client, conductor, cliente } = body;
 
@@ -60,40 +64,35 @@ export async function POST(req: NextRequest) {
         // 2. Buscar la línea con credenciales
         const linea = await LineasModel
             .findById(line_id)
-            .select('+phone_number_id +access_token')
+            .select('+phone_number_id +access_token +telegram_api_id +isWhatsappConfigured +isTelegramConfigured')
             .lean();
 
         if (!linea) {
-            return NextResponse.json(
-                { success: false, error: 'Línea no encontrada' },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, error: 'Línea no encontrada' }, { status: 404 });
         }
-
         if (linea.activa === false) {
-            return NextResponse.json(
-                { success: false, error: 'La línea está inactiva' },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, error: 'La línea está inactiva' }, { status: 403 });
         }
 
-        // 3. Construir el payload para WhatsApp Cloud API
-        const waUrl = `${WA_API_BASE}/${WA_API_VERSION}/${linea.phone_number_id}/messages`;
-        const headers = {
-            'Authorization': `Bearer ${linea.access_token}`,
-            'Content-Type': 'application/json',
-        };
+        // Determinar plataforma de despacho según configuración de la línea
+        const dispatchPlatform = linea.plataforma_despacho || 'whatsapp';
 
-        // Normalizar el teléfono destino (quitar 0 inicial, agregar 58 si es venezolano)
-        const destPhone = normalizePhoneForWA(phone);
+        // Validar credenciales de la plataforma seleccionada mediante los flags (con fallback para líneas no migradas)
+        const isWAConfigured = linea.isWhatsappConfigured || (linea.phone_number_id && linea.access_token);
+        const isTGConfigured = linea.isTelegramConfigured || linea.telegram_api_id;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let waPayload: Record<string, any>;
+        if (dispatchPlatform === 'telegram' && !isTGConfigured) {
+            return NextResponse.json({ success: false, error: 'La línea no tiene Telegram configurado para despachos' }, { status: 400 });
+        }
+        if (dispatchPlatform === 'whatsapp' && !isWAConfigured) {
+            return NextResponse.json({ success: false, error: 'La línea no tiene WhatsApp configurado para despachos' }, { status: 400 });
+        }
+
         let sentAsImage = false;
         let photoUrl: string | undefined = undefined;
         let conductorId: mongoose.Types.ObjectId | undefined = undefined;
 
-        // 4. Según el tipo, decidir cómo enviar
+        // 3. Según el tipo, decidir cómo enviar
         let finalMessage = message;
         
         if (type === 'dispatch_driver') {
@@ -113,56 +112,62 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            console.log(`[dispatch] dispatch_client: targetDriverPhone extraido=${targetDriverPhone}`);
+            console.log(`[dispatch-${dispatchPlatform}] dispatch_client: targetDriverPhone extraido=${targetDriverPhone}`);
 
             if (targetDriverPhone) {
-                // 4.1 Intentar obtener la foto desde la base de datos (MongoDB) primero
+                // 3.1 Intentar obtener la foto desde la base de datos (MongoDB) primero
                 const driverPhoneVariants = getPhoneVariants(targetDriverPhone);
                 const conductorRecord = await ConductoresModel.findOne({
                     telefono: { $in: driverPhoneVariants },
                     linea: linea._id,
                 }).lean();
 
-                if (conductorRecord) {
-                    console.log(`[dispatch] Conductor encontrado en BD: ${conductorRecord._id}`);
+                if (conductorRecord && conductorRecord.foto_identificacion) {
+                    console.log(`[dispatch-${dispatchPlatform}] Conductor encontrado en BD con foto: ${conductorRecord._id}`);
                     conductorId = conductorRecord._id as mongoose.Types.ObjectId;
                     photoUrl = conductorRecord.foto_identificacion;
-                } else {
-                    console.log(`[dispatch] NO se encontro conductor en BD para telefonos:`, driverPhoneVariants);
-                }
-
-                // 4.2 Si no hay foto en MongoDB, intentar el helper de PocketBase
-                if (!photoUrl) {
-                    const pbPhoto = await getDriverPhotoUrl(targetDriverPhone);
-                    if (pbPhoto) photoUrl = pbPhoto;
-                }
-
-                if (photoUrl) {
-                    // Enviar imagen del chófer al cliente con caption
-                    waPayload = {
-                        messaging_product: 'whatsapp',
-                        recipient_type: 'individual',
-                        to: destPhone,
-                        type: 'image',
-                        image: {
-                            link: photoUrl,
-                            caption: finalMessage,
-                        },
-                    };
                     sentAsImage = true;
                 } else {
-                    // Sin foto → enviar solo texto
-                    console.log(`[dispatch] No se encontró foto para chófer ${targetDriverPhone}, enviando solo texto`);
-                    waPayload = {
-                        messaging_product: 'whatsapp',
-                        recipient_type: 'individual',
-                        to: destPhone,
-                        type: 'text',
-                        text: { preview_url: false, body: finalMessage },
-                    };
+                    console.log(`[dispatch-${dispatchPlatform}] NO se encontro conductor con foto en BD`);
+                    if (conductorRecord) conductorId = conductorRecord._id as mongoose.Types.ObjectId;
+
+                    // 3.2 Si no hay foto en MongoDB, intentar el helper de PocketBase
+                    const pbPhoto = await getDriverPhotoUrl(targetDriverPhone);
+                    if (pbPhoto) {
+                        photoUrl = pbPhoto;
+                        sentAsImage = true;
+                    }
                 }
+            }
+        }
+
+        // Normalizar teléfono destino según plataforma
+        const destPhone = dispatchPlatform === 'telegram' 
+            ? normalizePhoneForTG(phone) 
+            : normalizePhoneForWA(phone);
+
+        let finalMessageId = `dispatch-${Date.now()}`;
+
+        // 4. Enviar a la plataforma correspondiente
+        if (dispatchPlatform === 'whatsapp') {
+            const waUrl = `${WA_API_BASE}/${WA_API_VERSION}/${linea.phone_number_id}/messages`;
+            const headers = {
+                'Authorization': `Bearer ${linea.access_token}`,
+                'Content-Type': 'application/json',
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let waPayload: Record<string, any>;
+            
+            if (sentAsImage && photoUrl) {
+                waPayload = {
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: destPhone,
+                    type: 'image',
+                    image: { link: photoUrl, caption: finalMessage },
+                };
             } else {
-                console.log(`[dispatch] No se detectó número de chófer en el mensaje, enviando solo texto al cliente`);
                 waPayload = {
                     messaging_product: 'whatsapp',
                     recipient_type: 'individual',
@@ -171,58 +176,68 @@ export async function POST(req: NextRequest) {
                     text: { preview_url: false, body: finalMessage },
                 };
             }
-        } else {
-            // dispatch_driver o general → solo texto (NUNCA ubicación ni imagen a conductores)
-            waPayload = {
-                messaging_product: 'whatsapp',
-                recipient_type: 'individual',
-                to: destPhone,
-                type: 'text',
-                text: { preview_url: false, body: finalMessage },
-            };
+
+            const waResponse = await fetch(waUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(waPayload),
+            });
+
+            if (!waResponse.ok) {
+                const waError = await waResponse.json().catch(() => ({}));
+                console.error('[dispatch-whatsapp] Error de WhatsApp API:', waError);
+                return NextResponse.json(
+                    { success: false, error: 'Error al enviar el mensaje por WhatsApp', detail: waError },
+                    { status: 502 }
+                );
+            }
+
+            const waData = await waResponse.json();
+            finalMessageId = waData?.messages?.[0]?.id ?? finalMessageId;
+
+        } else if (dispatchPlatform === 'telegram') {
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+            const tgResponse = await fetch(`${baseUrl}/internal/telegram/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    line_id,
+                    phone: destPhone,
+                    message: finalMessage,
+                    mediaUrl: sentAsImage ? photoUrl : null
+                }),
+            });
+
+            if (!tgResponse.ok) {
+                const tgError = await tgResponse.json().catch(() => ({}));
+                console.error('[dispatch-telegram] Error enviando por Telegram:', tgError);
+                return NextResponse.json(
+                    { success: false, error: 'Error al enviar por Telegram', detail: tgError },
+                    { status: 502 }
+                );
+            }
+            finalMessageId = `tg-dispatch-${Date.now()}`;
         }
 
-        // 5. Enviar a WhatsApp
-        const waResponse = await fetch(waUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(waPayload),
-        });
-
-        if (!waResponse.ok) {
-            const waError = await waResponse.json().catch(() => ({}));
-            console.error('[dispatch] Error de WhatsApp API:', waError);
-            return NextResponse.json(
-                { success: false, error: 'Error al enviar el mensaje por WhatsApp', detail: waError },
-                { status: 502 }
-            );
-        }
-
-        const waData = await waResponse.json();
-        const wa_message_id: string = waData?.messages?.[0]?.id ?? `dispatch-${Date.now()}`;
-
-        // 6. Registrar en la base de datos (upsert del chat)
+        // 5. Registrar en la base de datos (upsert del chat)
         const lineaId = linea._id.toString();
         const now = new Date();
 
-        const nuevoMensaje = {
+        const nuevoMensaje: IMessage = {
             _id: new mongoose.Types.ObjectId(),
-            origen: 'sistema' as const,
-            texto: finalMessage, // Utilizamos el finalMessage sin el link de maps
+            origen: 'sistema',
+            texto: finalMessage, 
             timestamp: now,
             leido: true,
-            estado: 'enviado' as const,
-            wa_message_id,
-            tipo: sentAsImage ? 'image' : 'text',
-            ...(sentAsImage && photoUrl ? { media_url: photoUrl } : {})
+            estado: 'enviado',
+            tipo: (sentAsImage && photoUrl) ? 'image' : 'text',
+            media_url: (sentAsImage && photoUrl) ? photoUrl : undefined,
+            ...(dispatchPlatform === 'whatsapp' ? { wa_message_id: finalMessageId } : {}),
+            ...(dispatchPlatform === 'telegram' ? { tg_peer_id: 'dispatch' } : {}),
         };
 
-        // Determinar nombre del destinatario
-        const destinatarioNombre = type === 'dispatch_client'
-            ? client?.name
-            : driver?.name;
+        const destinatarioNombre = type === 'dispatch_client' ? client?.name : driver?.name;
 
-        // Buscar el conductor en la BD por teléfono si es dispatch_driver
         if (type === 'dispatch_driver' && phone) {
             const driverPhoneVariants = getPhoneVariants(phone);
             const conductorQuery = await ConductoresModel.findOne({
@@ -234,8 +249,17 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Buscar o crear chat
-        let chat = await ChatsModel.findOne({ linea: lineaId, cliente_phone: destPhone });
+        let chat = await ChatsModel.findOne({ linea: lineaId, cliente_phone: destPhone, platform: dispatchPlatform });
+        
+        // Verificar si el usuario está bloqueado para recibir mensajes
+        if (chat && chat.bloqueado) {
+            console.log(`[dispatch-${dispatchPlatform}] Envío cancelado: El usuario ${destPhone} está marcado como EXENTO (bloqueado).`);
+            return NextResponse.json({ 
+                success: false, 
+                error: 'El usuario ha solicitado no recibir más mensajes por esta vía.' 
+            }, { status: 403 });
+        }
+
         const isNewChat = !chat;
 
         if (!chat) {
@@ -246,22 +270,20 @@ export async function POST(req: NextRequest) {
                 tipo_chat: type === 'dispatch_driver' ? 'conductor' : 'cliente',
                 conductor: conductorId,
                 estado: type === 'dispatch_client' ? 'cerrado' : 'en_atencion',
+                platform: dispatchPlatform,
                 mensajes: [nuevoMensaje],
                 ultimoMensaje: now,
             });
         } else {
-            chat.mensajes.push(nuevoMensaje as any);
+            chat.mensajes.push(nuevoMensaje);
             chat.ultimoMensaje = now;
             if (destinatarioNombre && !chat.cliente_nombre) {
                 chat.cliente_nombre = destinatarioNombre;
             }
-            // Vincular conductor si no estaba vinculado
             if (conductorId && !chat.conductor) {
                 chat.conductor = conductorId;
                 if (type === 'dispatch_driver') chat.tipo_chat = 'conductor';
             }
-            // Cerrar chat del cliente cuando se le envía info del conductor
-            // Manejar cambios de estado
             if (type === 'dispatch_client') {
                 chat.estado = 'cerrado';
             } else if (type === 'dispatch_driver') {
@@ -271,7 +293,7 @@ export async function POST(req: NextRequest) {
             await chat.save();
         }
 
-        // 7. Emitir Socket.io para panel web
+        // 6. Emitir Socket.io para panel web
         const io = (global as { io?: import('socket.io').Server }).io;
         if (io) {
             const chatId = chat._id.toString();
@@ -289,7 +311,6 @@ export async function POST(req: NextRequest) {
             io.to(`chat:${chatId}`).emit('chat:nuevo_mensaje', { chatId, mensaje: mensajePayload });
             io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:nuevo_mensaje', { chatId, mensaje: mensajePayload });
 
-            // Si es un chat nuevo, emitir evento para que aparezca en la lista del sidebar
             if (isNewChat) {
                 const chatPopulated = await ChatsModel.findById(chat._id)
                     .populate('linea', 'name')
@@ -305,12 +326,12 @@ export async function POST(req: NextRequest) {
                         tipo_chat: chatPopulated.tipo_chat,
                         conductor: chatPopulated.conductor,
                         estado: chatPopulated.estado,
+                        platform: chatPopulated.platform,
                         ultimoMensaje: chatPopulated.ultimoMensaje,
                     });
                 }
             }
 
-            // Si se cambió de estado, emitir evento
             if (type === 'dispatch_client' || type === 'dispatch_driver') {
                 const newEstado = type === 'dispatch_client' ? 'cerrado' : 'en_atencion';
                 io.to(`chat:${chatId}`).emit('chat:estado_cambiado', { chatId, estado: newEstado });
@@ -318,16 +339,25 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        return NextResponse.json({ success: true, messageId: wa_message_id });
+        return NextResponse.json({ success: true, messageId: finalMessageId, platform: dispatchPlatform });
     } catch (error) {
         console.error('[dispatch] Error interno:', error);
         return NextResponse.json({ success: false, error: 'Error interno' }, { status: 500 });
     }
 }
 
-// ── Normalización del teléfono para WhatsApp ────────────────────────────────
-// FoxPro envía "04121234567", WhatsApp necesita "584121234567"
 function normalizePhoneForWA(phone: string): string {
+    let p = phone.replace(/\D/g, '');
+    if (p.startsWith('0')) {
+        p = '58' + p.slice(1);
+    }
+    if (p.length === 10) {
+        p = '58' + p;
+    }
+    return p;
+}
+
+function normalizePhoneForTG(phone: string): string {
     let p = phone.replace(/\D/g, '');
     if (p.startsWith('0')) {
         p = '58' + p.slice(1);
@@ -344,11 +374,11 @@ function getPhoneVariants(phone: string): string[] {
     if (p.startsWith('58')) norm = p.slice(2);
     else if (p.startsWith('0')) norm = p.slice(1);
     
-    // norm is now e.g. "4241234567"
     return [
-        phone,       // format that was passed in
-        norm,        // 4241234567
-        `0${norm}`,  // 04241234567
-        `58${norm}`, // 584241234567
+        phone,       
+        norm,        
+        `0${norm}`,  
+        `58${norm}`, 
+        `+58${norm}` 
     ];
 }

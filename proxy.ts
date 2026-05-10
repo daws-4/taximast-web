@@ -5,12 +5,19 @@ import { verifyToken } from "@/lib/auth";
 const PUBLIC_ROUTES = [
     "/login",
     "/api/auth/login",
-    "/api/whatsapp/webhook", // El webhook usa verificación de firma HMAC, no API key
+    "/api/whatsapp/webhook",
+    "/api/telegram/ai-reply", // Excepción para la IA interna
+    "/api/aireply",           // Nueva ruta simplificada
     "/api/contact"
 ];
 
-// Rutas de WhatsApp que requieren API Key (no JWT)
-const WA_API_ROUTES = "/api/whatsapp";
+// Rutas de API que requieren API Key (no JWT) - FoxPro / Integraciones
+const API_KEY_ROUTES = [
+    "/api/dispatch",
+    "/api/status",
+    "/api/whatsapp",
+    "/api/telegram"           // Permitir acceso a Telegram via API Key
+];
 
 // Rutas exclusivas del admin global (gestión de todas las líneas)
 const ADMIN_GLOBAL_ROUTES = [
@@ -26,11 +33,21 @@ const ADMIN_SHARED_ROUTES = [
 
 export function proxy(req: NextRequest) {
     const { pathname } = req.nextUrl;
-
-    // Verificar token JWT desde la cookie
     const token = req.cookies.get("taximast_token")?.value;
 
-    // Si hay token válido y el usuario intenta acceder a /login → redirigir al dashboard
+    // 1. Permitir rutas públicas y assets INMEDIATAMENTE
+    const isPublic =
+        pathname === "/" ||
+        PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
+        pathname.startsWith("/_next") ||
+        pathname.startsWith("/favicon");
+
+    if (isPublic) {
+        // console.log(`[Proxy] Ruta pública permitida: ${pathname}`);
+        return NextResponse.next();
+    }
+
+    // 2. Si hay token válido y el usuario intenta acceder a /login → redirigir al dashboard
     if (token && pathname.startsWith("/login")) {
         const payload = verifyToken(token);
         if (payload) {
@@ -38,21 +55,26 @@ export function proxy(req: NextRequest) {
         }
     }
 
-    // ── Rutas de WhatsApp API: autenticación por API Key o JWT ──
-    if (pathname.startsWith(WA_API_ROUTES) && !pathname.startsWith("/api/whatsapp/webhook")) {
+    // 3. Rutas de API externas (API Key o JWT)
+    const isApiKeyRoute = API_KEY_ROUTES.some(route => pathname.startsWith(route));
+    if (isApiKeyRoute && !pathname.startsWith("/api/whatsapp/webhook")) {
         const authHeader = req.headers.get("authorization");
+        const xApiKey = req.headers.get("x-api-key");
         const waApiKey = process.env.WA_API_KEY;
         const hasValidToken = token && verifyToken(token);
 
         let passesApiKey = false;
-        if (!waApiKey) {
-            // Si no hay API key configurada en el servidor, permitir (desarrollo)
-            passesApiKey = true;
-        } else if (authHeader === `Bearer ${waApiKey}`) {
+        let providedKey = xApiKey;
+        if (!providedKey && authHeader && authHeader.startsWith('Bearer ')) {
+            providedKey = authHeader.substring(7);
+        }
+
+        if (!waApiKey || providedKey === waApiKey) {
             passesApiKey = true;
         }
 
         if (!passesApiKey && !hasValidToken) {
+            console.warn(`[Proxy] 401 - Acceso denegado a ruta de API: ${pathname}`);
             return NextResponse.json(
                 { error: "API key inválida o faltante", connected: false },
                 { status: 401 }
@@ -62,24 +84,14 @@ export function proxy(req: NextRequest) {
         return NextResponse.next();
     }
 
-    // Permitir rutas públicas y assets de Next.js
-    const isPublic =
-        pathname === "/" ||
-        PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
-        pathname.startsWith("/_next") ||
-        pathname.startsWith("/favicon");
-
-    if (isPublic) return NextResponse.next();
-
-    // Si no hay token → redirigir a la raíz
+    // 4. Verificación de sesión para el resto de rutas
     if (!token) {
+        console.warn(`[Proxy] 302 - Sin token en ruta protegida: ${pathname}`);
         return NextResponse.redirect(new URL("/", req.url));
     }
 
     const payload = verifyToken(token);
-
     if (!payload) {
-        // Token inválido o expirado → limpiar cookie y redirigir a la raíz
         const response = NextResponse.redirect(new URL("/", req.url));
         response.cookies.set("taximast_token", "", { maxAge: 0, path: "/" });
         return response;

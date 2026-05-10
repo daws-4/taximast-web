@@ -47,7 +47,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
 
         // Actualizar datos
         if (body.name !== undefined) linea.name = body.name.trim();
-        if (body.whatsapp_number !== undefined) linea.whatsapp_number = body.whatsapp_number.trim();
+        if (body.whatsapp_number !== undefined) linea.whatsapp_number = body.whatsapp_number.replace(/\D/g, "");
         if (body.phone_number_id !== undefined) linea.phone_number_id = body.phone_number_id.trim();
         if (body.waba_id !== undefined) linea.waba_id = body.waba_id.trim();
         if (body.access_token !== undefined) linea.access_token = body.access_token.trim();
@@ -55,7 +55,27 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         if (body.app_secret !== undefined) linea.app_secret = body.app_secret.trim();
         if (body.gemini_api_key !== undefined) linea.gemini_api_key = body.gemini_api_key.trim();
         if (body.gemini_prompt !== undefined) linea.gemini_prompt = body.gemini_prompt.trim();
+        if (body.telegram_api_id !== undefined) {
+            linea.telegram_api_id = body.telegram_api_id ? parseInt(body.telegram_api_id, 10) : undefined;
+        }
+        if (body.telegram_api_hash !== undefined) linea.telegram_api_hash = body.telegram_api_hash.trim();
+        if (body.telegram_session !== undefined) linea.telegram_session = body.telegram_session.trim();
+        if (body.telegram_phone !== undefined) linea.telegram_phone = body.telegram_phone.replace(/\D/g, "");
+        if (body.plataforma_despacho !== undefined) linea.plataforma_despacho = body.plataforma_despacho;
         if (body.activa !== undefined) linea.activa = body.activa;
+        if (body.ia_activa !== undefined) (linea as any).ia_activa = body.ia_activa;
+
+        // Recalcular flags de configuración
+        linea.isWhatsappConfigured = Boolean(linea.whatsapp_number && linea.phone_number_id && linea.waba_id && linea.access_token);
+        linea.isTelegramConfigured = Boolean(linea.telegram_api_id && linea.telegram_api_hash);
+
+        console.log("Guardando línea con datos:", {
+            telegram_api_id: linea.telegram_api_id,
+            telegram_phone: linea.telegram_phone,
+            modifiedPaths: linea.modifiedPaths()
+        });
+
+        console.log("Schema paths en Next.js:", Object.keys(LineasModel.schema.paths).filter(p => p.startsWith('telegram')));
 
         await linea.save();
 

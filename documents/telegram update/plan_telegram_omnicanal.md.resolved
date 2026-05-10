@@ -1,0 +1,651 @@
+# Plan de Implementación: Telegram MTProto Omnicanal — Taximast Web
+
+> **Proyecto:** Taximast Web  
+> **Objetivo:** Integrar Telegram Client API (GramJS / Userbot MTProto) como canal alternativo a WhatsApp Cloud API, manteniendo compatibilidad total con Visual FoxPro, Socket.io, Gemini AI y el Dashboard React existente.  
+> **Enfoque:** Arquitectura omnicanal — cada `Linea` puede tener credenciales de WhatsApp, Telegram o ambas.
+
+---
+
+## 📋 Contexto del Proyecto Actual
+
+| Componente | Tecnología / Ubicación |
+|---|---|
+| Framework | Next.js 16 con custom server (`server.mjs`) |
+| Base de Datos | MongoDB Atlas vía Mongoose |
+| Modelo Líneas | [Lineas.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/models/Lineas.ts) — ILinea con credenciales WhatsApp |
+| Modelo Chats | [Chats.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/models/Chats.ts) — IChat con mensajes embebidos |
+| WebSockets | Socket.io con salas `linea:{id}` y `chat:{id}` |
+| IA | Gemini 2.5 Flash via [gemini.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/lib/gemini.ts) |
+| Outbound VFP | `POST /api/whatsapp/dispatch` — envía mensajes desde FoxPro |
+| Inbound WA | `POST /api/whatsapp/webhook` — recibe mensajes de Meta |
+| Envío UI | `POST /api/whatsapp/send` — operador envía desde dashboard |
+| Frontend | `ChatPageClient.tsx` + `DashboardClient.tsx` |
+
+> [!IMPORTANT]
+> GramJS requiere una conexión TCP persistente. **Toda la lógica de Telegram debe vivir en `server.mjs`**, NO en las API routes serverless de Next.js (`app/api/...`).
+
+---
+
+## 🚀 FASE 1: Credenciales de Telegram
+
+### 1.1 Obtener API ID y Hash
+1. Ir a [https://my.telegram.org](https://my.telegram.org) con el número de la línea de taxis.
+2. Ir a "API development tools" → Crear app → Obtener `api_id` y `api_hash`.
+
+### 1.2 Instalar Dependencias
+
+```bash
+npm install telegram input
+```
+
+
+
+---
+
+## 🔑 FASE 2: Script de Autenticación (String Session)
+
+### 2.1 Crear `scripts/tg_auth.mjs`
+
+```javascript
+// scripts/tg_auth.mjs — Genera la cadena de sesión de Telegram (ejecutar una sola vez)
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions/index.js";
+import input from "input";
+
+const stringSession = new StringSession("");
+
+(async () => {
+    console.log("Iniciando autenticación interactiva de Telegram...");
+    console.log("Si no tienes credenciales, obtenlas en https://my.telegram.org\n");
+
+    const rawApiId = await input.text("Ingresa tu API_ID (número): ");
+    const apiId = parseInt(rawApiId);
+    
+    const apiHash = await input.text("Ingresa tu API_HASH: ");
+
+    const client = new TelegramClient(stringSession, apiId, apiHash, {
+        connectionRetries: 5,
+    });
+
+    await client.start({
+        phoneNumber: async () => await input.text("Número telefónico (+58414...): "),
+        password: async () => await input.text("Contraseña 2FA (si aplica): "),
+        phoneCode: async () => await input.text("Código recibido en Telegram: "),
+        onError: (err) => console.log(err),
+    });
+
+    console.log("✅ ¡Autenticación exitosa!");
+    console.log("Copia esta cadena y guárdala en el campo `telegram_session` de la Línea en MongoDB:");
+    console.log("─".repeat(60));
+    console.log(client.session.save());
+    console.log("─".repeat(60));
+    process.exit(0);
+})();
+```
+
+### 2.2 Ejecutar y Guardar
+
+```bash
+node scripts/tg_auth.mjs
+```
+
+La cadena resultante (`1ApWapz...`) se guarda en el campo `telegram_session` del documento de la Línea correspondiente en MongoDB (ver Fase 3).
+
+---
+
+## 🗄️ FASE 3: Actualización del Esquema de Base de Datos
+
+### 3.1 Modelo `Lineas` — Agregar campos de Telegram
+
+Archivo: [models/Lineas.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/models/Lineas.ts)
+
+**Campos nuevos en la interfaz `ILinea`:**
+
+```typescript
+// Después de app_secret
+telegram_api_id?: number;
+telegram_api_hash?: string;
+telegram_session?: string;  // StringSession generada con tg_auth.mjs
+telegram_phone?: string;    // Número de TG de la línea (para identificación)
+```
+
+**Campos nuevos en `LineasSchema`:**
+
+```typescript
+// ── Telegram MTProto ──────────────────────────────────────────────
+telegram_api_id: {
+    type: Number,
+    select: false,
+},
+telegram_api_hash: {
+    type: String,
+    trim: true,
+    select: false,
+},
+telegram_session: {
+    type: String,
+    trim: true,
+    select: false,
+},
+telegram_phone: {
+    type: String,
+    trim: true,
+},
+```
+
+### 3.2 Modelo `Chats` — Agregar campo `platform`
+
+Archivo: [models/Chats.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/models/Chats.ts)
+
+**Interfaz `IChat` — agregar:**
+
+```typescript
+platform: 'whatsapp' | 'telegram';
+```
+
+**Schema `ChatsSchema` — agregar campo:**
+
+```typescript
+// Plataforma de mensajería de esta conversación
+platform: {
+    type: String,
+    enum: ['whatsapp', 'telegram'],
+    default: 'whatsapp',
+},
+```
+
+**Actualizar índice compuesto** (un mismo teléfono puede chatear por WA y TG):
+
+```diff
+-ChatsSchema.index({ linea: 1, cliente_phone: 1 }, { unique: true });
++ChatsSchema.index({ linea: 1, cliente_phone: 1, platform: 1 }, { unique: true });
+```
+
+### 3.3 Modelo `Chats` — Agregar `tg_message_id` al subdocumento `IMessage`
+
+```typescript
+// En la interfaz IMessage, agregar:
+tg_peer_id?: string;  // ID de Telegram del remitente (para deduplicación)
+```
+
+```typescript
+// En MensajeSchema, agregar:
+tg_peer_id: {
+    type: String,
+    sparse: true,
+},
+```
+
+### 3.4 Tipos Globales — Registrar `telegramClients`
+
+Archivo: [types/globals.d.ts](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/types/globals.d.ts)
+
+```typescript
+import { Server } from "socket.io";
+import { TelegramClient } from "telegram";
+
+declare global {
+    // eslint-disable-next-line no-var
+    var io: Server | undefined;
+    // eslint-disable-next-line no-var
+    var telegramClients: Map<string, TelegramClient> | undefined;
+}
+```
+
+---
+
+## ⚙️ FASE 4: Gestor Dinámico de Clientes Telegram en `server.mjs`
+
+Archivo: [server.mjs](file:///c:/Users/USUARIO/Desktop/proyectos/taximast/web/server.mjs)
+
+### 4.1 Imports necesarios (agregar al inicio)
+
+```javascript
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions/index.js";
+import { NewMessage } from "telegram/events/index.js";
+import mongoose from "mongoose";
+```
+
+### 4.2 Conexión a MongoDB y carga de modelos
+
+> [!WARNING]
+> `server.mjs` es un archivo ESM puro (no TypeScript). No puede importar directamente los modelos `.ts`. Hay dos opciones:
+> 1. **Usar mongoose directamente** con `mongoose.model()` ya registrado por Next.js.
+> 2. **Crear un helper `.mjs`** que conecte a MongoDB e importe los schemas.
+> 
+> **Opción recomendada:** Conectar mongoose directamente en `server.mjs` y usar `mongoose.model('Lineas')` después de que Next.js prepare la app (los modelos ya estarán registrados).
+
+### 4.3 Gestor dinámico multi-línea
+
+Agregar **dentro** de `app.prepare().then(...)`, después de configurar Socket.io:
+
+```javascript
+// ── TELEGRAM: Almacén de clientes activos ─────────────────────────
+global.telegramClients = new Map();
+
+async function initTelegramClients() {
+    try {
+        // Conectar a MongoDB (reutiliza la conexión de Next.js si ya existe)
+        const MONGODB_URI = process.env.MONGODB_URI;
+        if (!MONGODB_URI) {
+            console.warn("[telegram] MONGODB_URI no definido, omitiendo Telegram.");
+            return;
+        }
+
+        if (mongoose.connection.readyState !== 1) {
+            await mongoose.connect(MONGODB_URI, { bufferCommands: false });
+        }
+
+        // Buscar líneas activas con credenciales de Telegram
+        const Lineas = mongoose.model("Lineas");
+        const lineas = await Lineas.find({
+            activa: true,
+            telegram_session: { $exists: true, $ne: "" },
+            telegram_api_id: { $exists: true, $ne: null },
+        }).select("+telegram_api_id +telegram_api_hash +telegram_session +gemini_api_key +gemini_prompt");
+
+        for (const linea of lineas) {
+            try {
+                const session = new StringSession(linea.telegram_session);
+                const client = new TelegramClient(
+                    session,
+                    parseInt(linea.telegram_api_id),
+                    linea.telegram_api_hash,
+                    { connectionRetries: 5 }
+                );
+
+                await client.connect();
+                console.log(`✅ [Telegram] Conectado para línea: ${linea.name}`);
+
+                global.telegramClients.set(linea._id.toString(), client);
+
+                // Configurar escucha de mensajes entrantes (Fase 6)
+                setupTelegramInbound(client, linea, io);
+            } catch (err) {
+                console.error(`❌ [Telegram] Error conectando línea ${linea.name}:`, err.message);
+            }
+        }
+
+        if (lineas.length === 0) {
+            console.log("[Telegram] No hay líneas con credenciales de Telegram configuradas.");
+        }
+    } catch (error) {
+        console.error("❌ [Telegram] Error inicializando clientes:", error);
+    }
+}
+
+// Iniciar después de un breve delay para que Next.js registre los modelos Mongoose
+setTimeout(() => initTelegramClients(), 3000);
+```
+
+---
+
+## 🔌 FASE 5: Endpoints REST para VFP y UI (Outbound)
+
+Para mantener paridad total con la integración existente de Visual FoxPro, la ruta de despacho de Telegram debe manejar la misma lógica compleja que WhatsApp (búsqueda de foto de conductor, parseo de tipos `dispatch_driver`/`dispatch_client`, actualización de BD, cambio de estado de chat a cerrado/en_atencion y emisión de eventos de socket).
+
+Para evitar duplicar esta lógica de base de datos dentro del entorno limitado de `server.mjs`, usaremos **API Routes de Next.js** para la lógica de negocios y delegaremos solo el envío físico del mensaje a `server.mjs`.
+
+### 5.1 Route Interna en `server.mjs` (Motor de Envío Físico)
+
+Agregar en `server.mjs`, dentro del handler `createServer`, un endpoint muy sencillo, exclusivo para uso interno por parte de Next.js:
+
+```javascript
+// ── Middleware simple para parsear JSON
+function parseJSON(req) {
+    return new Promise((resolve, reject) => {
+        let body = "";
+        req.on("data", chunk => body += chunk);
+        req.on("end", () => {
+            try { resolve(JSON.parse(body)); }
+            catch { reject(new Error("Invalid JSON")); }
+        });
+    });
+}
+
+const httpServer = createServer(async (req, res) => {
+    // ── Ruta interna: Motor de envío Telegram ───────────────────────
+    if (req.method === "POST" && req.url === "/internal/telegram/send") {
+        try {
+            const body = await parseJSON(req);
+            const { line_id, phone, message, mediaUrl } = body;
+
+            const tgClient = global.telegramClients?.get(line_id);
+            if (!tgClient || !tgClient.connected) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: false, error: "Cliente Telegram inactivo para esta línea" }));
+            }
+
+            const normalizedPhone = phone.startsWith("+") ? phone : "+" + phone.replace(/\D/g, "");
+            
+            if (mediaUrl) {
+                // Si VFP envía datos de chofer (dispatch_client) y hay foto, la enviamos por Telegram
+                await tgClient.sendFile(normalizedPhone, { file: mediaUrl, caption: message });
+            } else {
+                await tgClient.sendMessage(normalizedPhone, { message });
+            }
+
+            res.writeHead(200, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            return res.end(JSON.stringify({ success: false, error: error.message }));
+        }
+    }
+
+    // ── Handler por defecto: Next.js ──────────────────────────────
+    handle(req, res);
+});
+```
+
+### 5.2 API Route de Dispatch para VFP (`app/api/telegram/dispatch/route.ts`)
+
+Crear un nuevo archivo que sirva como "espejo" de `whatsapp/dispatch/route.ts` pero para Telegram.
+
+Este endpoint hace lo siguiente (igual que WhatsApp):
+1. **Recibe** el payload de FoxPro (`type`, `conductor`, `message`, etc).
+2. **Busca la foto** del conductor en Mongoose/PocketBase si el tipo es `dispatch_client`.
+3. **Hace un fetch interno** a `http://localhost:${PORT}/internal/telegram/send` pasándole el `mediaUrl` y el `message`.
+4. **Guarda** el mensaje saliente en `ChatsModel` (con `platform: 'telegram'`).
+5. **Aplica** los cambios de estado (si `dispatch_client` -> cierra el chat, si `dispatch_driver` -> `en_atencion`).
+6. **Emite** a través de `global.io` los eventos `chat:nuevo_mensaje` y `chat:estado_cambiado`.
+
+### 5.3 Endpoint Unificado para la UI (`app/api/send/route.ts`)
+
+Para simplificar el frontend (`Dashboard`), podemos crear un "router" de envío. El frontend solo envía a `/api/send`, indicando la plataforma:
+
+```typescript
+// app/api/send/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+    const body = await req.json();
+    const { platform, ...rest } = body;
+    
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const target = platform === 'telegram' 
+        ? `${baseUrl}/api/telegram/send` 
+        : `${baseUrl}/api/whatsapp/send`;
+
+    const res = await fetch(target, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rest)
+    });
+    
+    return NextResponse.json(await res.json(), { status: res.status });
+}
+```
+*(También se debe crear `app/api/telegram/send/route.ts` basándose en su contraparte de WhatsApp).*
+
+---
+
+## 🤖 FASE 6: Recepción Inbound, BD e IA
+
+### 6.1 Función `setupTelegramInbound` en `server.mjs`
+
+```javascript
+function setupTelegramInbound(tgClient, lineaData, io) {
+    tgClient.addEventHandler(async (event) => {
+        const message = event.message;
+
+        // Ignorar mensajes salientes (evitar bucles)
+        if (message.out) return;
+
+        try {
+            const senderId = message.peerId?.userId?.toString();
+            const text = message.text;
+            if (!text || !senderId) return; // Ignorar mensajes sin texto o sin sender
+
+            const sender = await message.getSender();
+            const phone = sender?.phone ? `+${sender.phone}` : senderId;
+            const senderName = sender?.firstName
+                ? `${sender.firstName}${sender.lastName ? " " + sender.lastName : ""}`
+                : "Usuario TG";
+
+            console.log(`[IN - TG - ${lineaData.name}] De: ${phone} | ${text}`);
+
+            const lineaId = lineaData._id.toString();
+
+            // 1. Buscar o crear Chat con platform='telegram'
+            const Chats = mongoose.model("Chats");
+            const Conductores = mongoose.model("Conductores");
+            const now = new Date();
+
+            const nuevoMensaje = {
+                _id: new mongoose.Types.ObjectId(),
+                origen: "cliente",
+                texto: text,
+                timestamp: now,
+                leido: false,
+                estado: "entregado",
+                tipo: "text",
+                tg_peer_id: senderId,
+            };
+
+            // Detectar si es un conductor
+            const conductorDoc = phone !== senderId
+                ? await Conductores.findOne({
+                    linea: lineaId,
+                    telefono: { $in: getPhoneVariantsTG(phone) },
+                    activo: true,
+                })
+                : null;
+
+            let chat = await Chats.findOne({
+                linea: lineaId,
+                cliente_phone: phone,
+                platform: "telegram",
+            });
+
+            let isNew = false;
+            let wasReopened = false;
+
+            if (!chat) {
+                isNew = true;
+                chat = await Chats.create({
+                    linea: lineaId,
+                    cliente_phone: phone,
+                    cliente_nombre: senderName,
+                    platform: "telegram",
+                    estado: "pendiente",
+                    tipo_chat: conductorDoc ? "conductor" : "cliente",
+                    ...(conductorDoc ? { conductor: conductorDoc._id } : {}),
+                    mensajes: [nuevoMensaje],
+                    ultimoMensaje: now,
+                });
+            } else {
+                if (chat.estado === "cerrado") {
+                    chat.estado = "pendiente";
+                    wasReopened = true;
+                }
+                chat.mensajes.push(nuevoMensaje);
+                chat.ultimoMensaje = now;
+                if (senderName && !chat.cliente_nombre) chat.cliente_nombre = senderName;
+                await chat.save();
+            }
+
+            const chatId = chat._id.toString();
+
+            // 2. Si no hay IA configurada → esperando_operador
+            if (!lineaData.gemini_api_key && (chat.estado === "pendiente" || wasReopened)) {
+                chat.estado = "esperando_operador";
+                await chat.save();
+                if (io) {
+                    io.to(`linea:${lineaId}`).to("linea:admin").emit("chat:estado_cambiado", {
+                        chatId, estado: chat.estado,
+                    });
+                }
+            }
+
+            // 3. Emitir Socket.io al Dashboard
+            if (io) {
+                if (isNew) {
+                    io.to(`linea:${lineaId}`).to("linea:admin").emit("chat:nuevo_chat", {
+                        _id: chatId,
+                        linea: { _id: lineaId, name: lineaData.name },
+                        cliente_phone: phone,
+                        cliente_nombre: senderName,
+                        tipo_chat: chat.tipo_chat,
+                        estado: chat.estado,
+                        platform: "telegram",
+                        ultimoMensaje: now.toISOString(),
+                    });
+                } else {
+                    io.to(`chat:${chatId}`).emit("chat:nuevo_mensaje", {
+                        chatId,
+                        mensaje: {
+                            _id: nuevoMensaje._id.toString(),
+                            origen: "cliente",
+                            texto: text,
+                            timestamp: now.toISOString(),
+                            leido: false,
+                            tipo: "text",
+                        },
+                    });
+                }
+
+                // Sidebar update
+                io.to(`linea:${lineaId}`).to("linea:admin").emit("chat:nuevo_mensaje", {
+                    chatId,
+                    mensaje: {
+                        _id: nuevoMensaje._id.toString(),
+                        origen: "cliente",
+                        texto: text,
+                        timestamp: now.toISOString(),
+                    },
+                });
+            }
+
+            // 4. Integración con Gemini IA (misma lógica que webhook WA)
+            if (lineaData.gemini_api_key && chat.tipo_chat !== "conductor" && chat.estado !== "en_atencion") {
+                try {
+                    // Importar dinámicamente gemini (compilado por Next.js)
+                    // NOTA: Requiere que getGeminiReply esté disponible como módulo ESM
+                    // Alternativa: hacer fetch a una API route interna
+                    const aiRes = await fetch(`http://localhost:${port}/api/telegram/ai-reply`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            lineaId,
+                            chatId,
+                            senderId,
+                            wasReopened,
+                        }),
+                    });
+                    // La API route maneja guardar en BD y emitir sockets
+                } catch (aiErr) {
+                    console.error("[TG AI Error]:", aiErr.message);
+                }
+            }
+
+        } catch (err) {
+            console.error("[Telegram Inbound Error]:", err);
+        }
+    }, new NewMessage({}));
+}
+
+// Helper: variantes de teléfono para búsqueda de conductores
+function getPhoneVariantsTG(phone) {
+    let p = phone.replace(/\D/g, "");
+    let norm = p;
+    if (p.startsWith("58")) norm = p.slice(2);
+    else if (p.startsWith("0")) norm = p.slice(1);
+    return [phone, norm, `0${norm}`, `58${norm}`, `+58${norm}`];
+}
+```
+
+### 6.2 API Route para respuesta IA de Telegram
+
+Crear: `app/api/telegram/ai-reply/route.ts`
+
+Esta ruta recibe el `chatId` y `lineaId`, carga el chat de la BD, llama a `getGeminiReply`, guarda la respuesta, envía por Telegram (via `global.telegramClients`) y emite sockets. Sigue el mismo patrón del paso 7 de `webhook/route.ts`.
+
+> [!NOTE]
+> Este enfoque "fetch interno" resuelve el problema de que `server.mjs` (ESM puro) no puede importar los módulos TypeScript directamente. La API route de Next.js sí tiene acceso a `getGeminiReply` y los modelos Mongoose.
+
+---
+
+## 🖥️ FASE 7: Adaptaciones del Frontend
+
+### 7.1 Tipos — Agregar `platform` a `ChatSummary`
+
+En `ChatPageClient.tsx`, agregar a la interfaz `ChatSummary`:
+
+```typescript
+platform?: 'whatsapp' | 'telegram';
+```
+
+### 7.2 Ícono de plataforma en la lista de chats
+
+En el componente `ChatListItem`, agregar un ícono visual:
+
+```tsx
+// Junto al nombre del chat
+{chat.platform === 'telegram' ? (
+    <span className="text-xs shrink-0" title="Telegram">✈️</span>
+) : (
+    <span className="text-xs shrink-0" title="WhatsApp">💬</span>
+)}
+```
+
+### 7.3 Filtro por plataforma (opcional)
+
+Agregar tabs o toggle en el sidebar para filtrar chats por `platform`.
+
+### 7.4 Envío desde UI — Detectar plataforma
+
+Modificar `handleSend` en `ConversationPanel` para que:
+- Si `chat.platform === 'telegram'` → POST a `/api/telegram/send`
+- Si `chat.platform === 'whatsapp'` (o default) → POST a `/api/whatsapp/send` (como está ahora)
+
+### 7.5 Socket events — Agregar `platform` al payload `chat:nuevo_chat`
+
+El frontend ya consume `chat:nuevo_chat`. Solo hay que asegurar que el backend incluya `platform` en el payload (ya cubierto en Fase 6).
+
+---
+
+## 🧪 FASE 8: Checklist de Pruebas
+
+| # | Prueba | Cómo verificar |
+|---|---|---|
+| 1 | **Autenticación** | `node scripts/tg_auth.mjs` genera y muestra la String Session |
+| 2 | **Arranque del servidor** | `npm run dev` → consola muestra `✅ [Telegram] Conectado para línea: X` |
+| 3 | **Envío VFP (Outbound)** | POST a `/api/telegram/dispatch` con `{ line_id, phone, message }` → mensaje llega al teléfono destino |
+| 4 | **Recepción (Inbound)** | Enviar mensaje desde un número personal al número TG de la línea → consola muestra `[IN - TG - ...]` |
+| 5 | **BD: platform** | Verificar en MongoDB que el chat creado tiene `platform: 'telegram'` |
+| 6 | **Socket.io al Dashboard** | El chat aparece en el sidebar con el ícono ✈️ |
+| 7 | **IA Gemini** | Si la línea tiene `gemini_api_key`, el bot responde automáticamente por Telegram |
+| 8 | **Coexistencia WA+TG** | Una línea con ambas credenciales recibe y envía por ambos canales sin interferencia |
+| 9 | **Índice único** | Verificar que el mismo teléfono puede tener un chat WA y uno TG sin error de duplicado |
+
+---
+
+## 📁 Resumen de Archivos a Crear/Modificar
+
+| Acción | Archivo |
+|---|---|
+| ✏️ Modificar | `models/Lineas.ts` — campos Telegram |
+| ✏️ Modificar | `models/Chats.ts` — campo `platform`, índice compuesto, `tg_peer_id` |
+| ✏️ Modificar | `types/globals.d.ts` — declarar `telegramClients` |
+| ✏️ Modificar | `server.mjs` — gestor dinámico, inbound handler, ruta dispatch |
+| ✏️ Modificar | `components/dashboard/ChatPageClient.tsx` — platform en tipos, ícono, envío |
+| ✏️ Modificar | `.env` | (No se requiere modificar el .env para Telegram) |
+| 🆕 Crear | `scripts/tg_auth.mjs` — autenticación única |
+| 🆕 Crear | `app/api/telegram/ai-reply/route.ts` — respuesta IA para TG |
+| 🆕 Crear | `app/api/telegram/send/route.ts` — envío desde UI por TG |
+| 📦 Instalar | `telegram`, `input` |
+
+---
+
+## ⚠️ Consideraciones Importantes
+
+> [!CAUTION]
+> **Riesgo de ban:** Telegram puede banear cuentas que usen la Client API de forma abusiva (spam, envío masivo no solicitado). Usar con moderación y solo para responder a clientes que iniciaron la conversación.
+
+> [!WARNING]
+> **Conexión persistente:** Si el servidor se reinicia, los clientes de Telegram se reconectan automáticamente usando la String Session almacenada. No se requiere re-autenticación.
+
+> [!NOTE]
+> **Migración gradual:** Este plan permite activar Telegram línea por línea. Las líneas sin credenciales de Telegram siguen funcionando exactamente igual con WhatsApp.

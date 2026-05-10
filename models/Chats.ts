@@ -16,6 +16,7 @@ export interface IMessage {
     tipo?: "text" | "image" | "audio" | "video" | "document" | "location" | "template" | "sticker" | string;
     wa_message_id?: string;
     media_url?: string;
+    tg_peer_id?: string;
 }
 
 const MensajeSchema = new Schema<IMessage>(
@@ -54,6 +55,10 @@ const MensajeSchema = new Schema<IMessage>(
             type: String,
             sparse: true,
         },
+        tg_peer_id: {
+            type: String,
+            sparse: true,
+        },
     },
     { _id: true }
 );
@@ -67,8 +72,11 @@ export interface IChat extends Document {
     tipo_chat: "cliente" | "conductor";
     conductor?: mongoose.Types.ObjectId;
     estado: "pendiente" | "bot_atendiendo" | "esperando_operador" | "en_atencion" | "cerrado";
+    platform: "whatsapp" | "telegram";
     mensajes: IMessage[];
     ultimoMensaje: Date;
+    bloqueado: boolean;
+    tg_user_id?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -117,6 +125,12 @@ const ChatsSchema = new Schema<IChat>(
             enum: ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion", "cerrado"],
             default: "pendiente",
         },
+        // Plataforma de mensajería
+        platform: {
+            type: String,
+            enum: ["whatsapp", "telegram"],
+            default: "whatsapp",
+        },
         // Array de mensajes embebido para evitar joins costosos
         mensajes: {
             type: [MensajeSchema],
@@ -128,16 +142,34 @@ const ChatsSchema = new Schema<IChat>(
             default: () => new Date(),
             index: true,
         },
+        // Flag para marcar si el usuario está exento de recibir mensajes (bloqueo solicitado por usuario)
+        bloqueado: {
+            type: Boolean,
+            default: false,
+        },
+        // ID único de usuario de Telegram (persistente aunque cambie el teléfono)
+        tg_user_id: {
+            type: String,
+            sparse: true,
+            index: true,
+        },
     },
     { timestamps: true }
 );
 
 // Índice compuesto para buscar chats de una línea ordenados por actividad
 ChatsSchema.index({ linea: 1, ultimoMensaje: -1 });
-// Índice para buscar por número de cliente dentro de una línea
-ChatsSchema.index({ linea: 1, cliente_phone: 1 }, { unique: true });
 
-const ChatsModel: Model<IChat> =
-    mongoose.models?.Chats || mongoose.model<IChat>("Chats", ChatsSchema);
+// Índice para buscar por número de cliente y plataforma dentro de una línea
+// NOTA: Para Telegram, el lookup primario debería ser tg_user_id si existe
+ChatsSchema.index({ linea: 1, cliente_phone: 1, platform: 1 }, { unique: true });
+
+// Índice único opcional para Telegram por userID
+ChatsSchema.index({ linea: 1, tg_user_id: 1 }, { unique: true, sparse: true });
+
+if (mongoose.models?.Chats) {
+    delete mongoose.models.Chats;
+}
+const ChatsModel: Model<IChat> = mongoose.model<IChat>("Chats", ChatsSchema);
 
 export default ChatsModel;

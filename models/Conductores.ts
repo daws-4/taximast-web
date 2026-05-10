@@ -70,7 +70,9 @@ ConductoresSchema.index({ linea: 1, telefono: 1 }, { unique: true });
 // Índice para listar conductores activos de una línea
 ConductoresSchema.index({ linea: 1, activo: 1 });
 
-const ConductoresModel: Model<IConductor> =
-    mongoose.models?.Conductores || mongoose.model<IConductor>("Conductores", ConductoresSchema);
+if (mongoose.models?.Conductores) {
+    delete mongoose.models.Conductores;
+}
+const ConductoresModel: Model<IConductor> = mongoose.model<IConductor>("Conductores", ConductoresSchema);
 
 export default ConductoresModel;

@@ -73,8 +73,9 @@ const OperadoresSchema = new mongoose.Schema<IOperador>(
     { timestamps: true }
 );
 
-const OperadoresModel: Model<IOperador> =
-    mongoose.models?.Operadores ||
-    mongoose.model<IOperador>("Operadores", OperadoresSchema);
+if (mongoose.models?.Operadores) {
+    delete mongoose.models.Operadores;
+}
+const OperadoresModel: Model<IOperador> = mongoose.model<IOperador>("Operadores", OperadoresSchema);
 
 export default OperadoresModel;

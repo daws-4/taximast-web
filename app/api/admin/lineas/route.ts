@@ -17,12 +17,20 @@ async function getHandler(req: NextRequest) {
 
         const filtro = soloActivas ? { activa: true } : {};
 
-        // Excluye tokens sensibles del listado
+        // Obtiene gemini_api_key para saber si existe, pero no la expone al cliente
         const lineas = await LineasModel.find(filtro)
-            .select("-access_token -verify_token -phone_number_id -waba_id -gemini_api_key")
+            .select("-access_token -verify_token -phone_number_id -waba_id +gemini_api_key")
             .sort({ createdAt: -1 });
 
-        return NextResponse.json({ ok: true, data: lineas });
+        // Transformar: reemplazar gemini_api_key por has_gemini_key (boolean) para seguridad
+        const lineasSafe = lineas.map(l => {
+            const obj = l.toObject() as unknown as Record<string, any>;
+            obj.has_gemini_key = Boolean(obj.gemini_api_key);
+            delete obj.gemini_api_key;
+            return obj;
+        });
+
+        return NextResponse.json({ ok: true, data: lineasSafe });
     } catch (error) {
         console.error("[ADMIN/LINEAS GET] Error:", error);
         return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
@@ -39,25 +47,32 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token, app_secret, gemini_api_key, gemini_prompt } = body;
+        const { name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token, app_secret, gemini_api_key, gemini_prompt, telegram_api_id, telegram_api_hash, telegram_session, telegram_phone, plataforma_despacho } = body;
 
-        if (!name || !whatsapp_number || !phone_number_id || !waba_id || !access_token) {
+        if (!name) {
             return NextResponse.json(
-                { ok: false, error: "Faltan campos obligatorios: name, whatsapp_number, phone_number_id, waba_id, access_token" },
+                { ok: false, error: "El nombre de la línea es obligatorio" },
                 { status: 400 }
             );
         }
 
         const linea = await LineasModel.create({
             name: name.trim(),
-            whatsapp_number: whatsapp_number.trim(),
-            phone_number_id: phone_number_id.trim(),
-            waba_id: waba_id.trim(),
-            access_token: access_token.trim(),
+            whatsapp_number: whatsapp_number ? whatsapp_number.replace(/\D/g, "") : undefined,
+            phone_number_id: phone_number_id?.trim() || undefined,
+            waba_id: waba_id?.trim() || undefined,
+            access_token: access_token?.trim() || undefined,
             verify_token: verify_token?.trim() || undefined,
             app_secret: app_secret?.trim() || undefined,
             gemini_api_key: gemini_api_key?.trim() || undefined,
             gemini_prompt: gemini_prompt?.trim() || undefined,
+            telegram_api_id: telegram_api_id ? parseInt(telegram_api_id, 10) : undefined,
+            telegram_api_hash: telegram_api_hash?.trim() || undefined,
+            telegram_session: telegram_session?.trim() || undefined,
+            telegram_phone: telegram_phone ? telegram_phone.replace(/\D/g, "") : undefined,
+            isWhatsappConfigured: Boolean(whatsapp_number && phone_number_id && waba_id && access_token),
+            isTelegramConfigured: Boolean(telegram_api_id && telegram_api_hash),
+            plataforma_despacho: plataforma_despacho || 'whatsapp',
             activa: true,
         });
 

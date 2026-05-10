@@ -55,8 +55,14 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
 
     await connectDB();
 
-    const body = await req.json();
-    const { estado, operador } = body;
+    let body;
+    try {
+        body = await req.json();
+    } catch (e) {
+        console.warn(`[PATCH /api/chats/${id}] Intento de actualización con cuerpo vacío o inválido`);
+        return NextResponse.json({ ok: false, error: "Cuerpo de solicitud requerido y debe ser JSON válido" }, { status: 400 });
+    }
+    const { estado, operador, cliente_nombre, bloqueado } = body;
 
     const allowed: string[] = ["pendiente", "bot_atendiendo", "esperando_operador", "en_atencion", "cerrado"];
     if (estado && !allowed.includes(estado)) {
@@ -73,9 +79,37 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
             return NextResponse.json({ ok: false, error: "Sin permisos" }, { status: 403 });
         }
 
+        const estadoAnterior = chat.estado;
         if (estado) chat.estado = estado;
         if (operador !== undefined) chat.operador = operador;
+        if (cliente_nombre !== undefined) chat.cliente_nombre = cliente_nombre;
+        if (bloqueado !== undefined) chat.bloqueado = bloqueado;
         await chat.save();
+
+        // ── DISPARAR IA SI EL ESTADO CAMBIA A PENDIENTE ───────────────────────
+        if (estado === "pendiente" && estadoAnterior !== "pendiente") {
+            console.log(`[CHAT-PATCH] Estado cambiado a pendiente para chat ${id}. Intentando disparar IA...`);
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
+            
+            // Disparar de forma asíncrona para no bloquear la respuesta de la API
+            (async () => {
+                try {
+                    const endpoint = chat.platform === 'telegram' ? '/api/telegram/ai-reply' : '/api/whatsapp/ai-reply';
+                    const aiRes = await fetch(`${baseUrl}${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            lineaId: chat.linea.toString(),
+                            chatId: chat._id.toString(),
+                            senderId: chat.tg_user_id || chat.cliente_phone,
+                        }),
+                    });
+                    if (!aiRes.ok) console.error(`[CHAT-PATCH-AI] Fallo al disparar IA (${chat.platform}):`, await aiRes.json().catch(() => ({})));
+                } catch (e: any) {
+                    console.error(`[CHAT-PATCH-AI] Error crítico:`, e.message);
+                }
+            })();
+        }
 
         // Emitir evento Socket.io
         const io = (global as any).io;
@@ -84,6 +118,7 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
             io.to(`linea:${lineaId}`).to('linea:admin').emit("chat:estado_cambiado", {
                 chatId: id,
                 estado: chat.estado,
+                cliente_nombre: chat.cliente_nombre,
             });
         } else {
             console.log(`[PATCH /api/chats/${id}] WARNING: global.io NO ESTA DEFINIDO`);
