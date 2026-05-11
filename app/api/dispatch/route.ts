@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         if (authError) return authError;
 
         const body: DispatchBody = await req.json();
+        console.log(" [VFP-DEBUG] Payload recibido:", JSON.stringify(body, null, 2));
         const { line_id, phone, message, type = 'general', driver, client, conductor, cliente } = body;
 
         // 1. Validar campos requeridos
@@ -101,19 +102,25 @@ export async function POST(req: NextRequest) {
 
             // 3.0 RESTRICCIÓN TELEGRAM: Validar que el chófer exista si la plataforma es Telegram
             const driverPhoneVariants = getPhoneVariants(phone);
+            console.log(`[dispatch-telegram] Buscando chófer: ${phone} | Variantes: ${JSON.stringify(driverPhoneVariants)} | LineaID: ${linea._id}`);
+            
             const conductorRecord = await ConductoresModel.findOne({
                 telefono: { $in: driverPhoneVariants },
                 linea: linea._id,
             }).lean();
 
             if (conductorRecord) {
+                console.log(` [VFP-DEBUG] Chófer encontrado: ${conductorRecord.nombre} (${conductorRecord._id}) | Tel: ${conductorRecord.telefono}`);
                 conductorId = conductorRecord._id as mongoose.Types.ObjectId;
-            } else if (dispatchPlatform === 'telegram') {
-                console.log(`[dispatch-telegram] Envío cancelado: Chófer ${phone} no registrado.`);
-                return NextResponse.json({ 
-                    success: false, 
-                    error: 'Despacho denegado: El chófer no está registrado en el sistema para recibir mensajes por Telegram.' 
-                }, { status: 403 });
+            } else {
+                console.log(` [VFP-DEBUG] Chófer NO encontrado en la BD para la línea ${linea._id} y variantes ${JSON.stringify(driverPhoneVariants)}`);
+                if (dispatchPlatform === 'telegram') {
+                    console.log(`[dispatch-telegram] Envío cancelado: Chófer ${phone} no registrado.`);
+                    return NextResponse.json({ 
+                        success: false, 
+                        error: 'Despacho denegado: El chófer no está registrado en el sistema para recibir mensajes por Telegram.' 
+                    }, { status: 403 });
+                }
             }
         }
 
@@ -134,23 +141,29 @@ export async function POST(req: NextRequest) {
             if (targetDriverPhone) {
                 // 3.1 Intentar obtener la foto desde la base de datos (MongoDB) primero
                 const driverPhoneVariants = getPhoneVariants(targetDriverPhone);
+                console.log(`[dispatch-${dispatchPlatform}] dispatch_client: Buscando chófer: ${targetDriverPhone} | Variantes: ${JSON.stringify(driverPhoneVariants)} | LineaID: ${linea._id}`);
+                
                 const conductorRecord = await ConductoresModel.findOne({
                     telefono: { $in: driverPhoneVariants },
-                    linea: linea._id,
+                    linea: linea._id, // Filtro estricto por línea
                 }).lean();
 
-                if (conductorRecord && conductorRecord.foto_identificacion) {
-                    console.log(`[dispatch-${dispatchPlatform}] Conductor encontrado en BD con foto: ${conductorRecord._id}`);
+                if (conductorRecord) {
+                    console.log(`[dispatch-${dispatchPlatform}] Conductor encontrado en BD: ${conductorRecord.nombre} (${conductorRecord._id})`);
                     conductorId = conductorRecord._id as mongoose.Types.ObjectId;
-                    photoUrl = conductorRecord.foto_identificacion;
-                    sentAsImage = true;
+                    if (conductorRecord.foto_identificacion) {
+                        photoUrl = conductorRecord.foto_identificacion;
+                        sentAsImage = true;
+                    }
                 } else {
-                    console.log(`[dispatch-${dispatchPlatform}] NO se encontro conductor con foto en BD`);
-                    if (conductorRecord) conductorId = conductorRecord._id as mongoose.Types.ObjectId;
-
+                    console.log(`[dispatch-${dispatchPlatform}] NO se encontro conductor en esta línea (MongoDB). Validando en PocketBase...`);
+                    
                     // 3.2 Si no hay foto en MongoDB, intentar el helper de PocketBase
+                    // Pero SOLO si estamos seguros de que el teléfono es válido para esta operación
                     const pbPhoto = await getDriverPhotoUrl(targetDriverPhone);
                     if (pbPhoto) {
+                        // OJO: PocketBase no tiene filtro por línea, así que solo lo usamos 
+                        // si no encontramos nada en MongoDB pero queremos intentar el fallback de imagen.
                         photoUrl = pbPhoto;
                         sentAsImage = true;
                     }

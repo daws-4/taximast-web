@@ -6,6 +6,8 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 import mongoose from "mongoose";
+import fs from "fs";
+import path from "path";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0"; // Cambiado a 0.0.0.0 para Docker
@@ -25,7 +27,26 @@ function parseJSON(req) {
     });
 }
 
+const LOCK_FILE = path.join(process.cwd(), ".server.lock");
+
+function createLock() {
+    if (fs.existsSync(LOCK_FILE)) {
+        const oldPid = fs.readFileSync(LOCK_FILE, "utf8");
+        console.error(`\n🚨 ERROR CRÍTICO: El servidor ya parece estar ejecutándose (PID: ${oldPid}).`);
+        console.error(`Si estás seguro de que no hay otra instancia, borra el archivo: ${LOCK_FILE}\n`);
+        process.exit(1);
+    }
+    fs.writeFileSync(LOCK_FILE, process.pid.toString());
+}
+
+function removeLock() {
+    if (fs.existsSync(LOCK_FILE)) {
+        fs.unlinkSync(LOCK_FILE);
+    }
+}
+
 app.prepare().then(() => {
+    createLock();
     const httpServer = createServer(async (req, res) => {
         // Log de depuración para rastrear ruteo
         if (!req.url.startsWith('/_next') && !req.url.includes('/static')) {
@@ -211,8 +232,12 @@ app.prepare().then(() => {
             global.telegramClients.set(lineId, client);
             setupTelegramInbound(client, linea, global.io);
         } catch (err) {
-            console.error(`❌ [Telegram] Error conectando línea ${lineId}:`, err.message);
-            global.telegramErrors.set(lineId, err.message);
+            let detail = err.message;
+            if (err.message.includes("AUTH_KEY_DUPLICATED")) {
+                detail = "SESIÓN DUPLICADA: Esta línea ya está conectada desde otro lugar o proceso. Revisa que no tengas otra ventana de terminal abierta.";
+            }
+            console.error(`❌ [Telegram] Error conectando línea ${lineId}:`, detail);
+            global.telegramErrors.set(lineId, detail);
         }
     }
 
@@ -225,7 +250,7 @@ app.prepare().then(() => {
             }
 
             if (mongoose.connection.readyState !== 1) {
-                await mongoose.connect(MONGODB_URI, { bufferCommands: false });
+                await mongoose.connect(MONGODB_URI, { bufferCommands: true });
             }
 
             // Registrar esquemas dinámicos para que Node.js no falle al no poder importar TS
@@ -296,6 +321,25 @@ app.prepare().then(() => {
     httpServer.listen(port, () => {
         console.log(`> Ready on http://${hostname}:${port} (${dev ? "dev" : "prod"})`);
     });
+
+    // ── CIERRE LIMPIO ───────────────────────────────────────────────
+    const shutdown = async () => {
+        console.log("\n[Server] Cerrando servidor...");
+        
+        // Desconectar clientes de Telegram
+        if (global.telegramClients) {
+            console.log("[Telegram] Desconectando clientes...");
+            for (const [id, client] of global.telegramClients) {
+                try { await client.disconnect(); } catch (e) {}
+            }
+        }
+
+        removeLock();
+        process.exit(0);
+    };
+
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 });
 
 // Helper: variantes de teléfono para búsqueda de conductores
