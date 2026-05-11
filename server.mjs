@@ -27,26 +27,7 @@ function parseJSON(req) {
     });
 }
 
-const LOCK_FILE = path.join(process.cwd(), ".server.lock");
-
-function createLock() {
-    if (fs.existsSync(LOCK_FILE)) {
-        const oldPid = fs.readFileSync(LOCK_FILE, "utf8");
-        console.error(`\n🚨 ERROR CRÍTICO: El servidor ya parece estar ejecutándose (PID: ${oldPid}).`);
-        console.error(`Si estás seguro de que no hay otra instancia, borra el archivo: ${LOCK_FILE}\n`);
-        process.exit(1);
-    }
-    fs.writeFileSync(LOCK_FILE, process.pid.toString());
-}
-
-function removeLock() {
-    if (fs.existsSync(LOCK_FILE)) {
-        fs.unlinkSync(LOCK_FILE);
-    }
-}
-
 app.prepare().then(() => {
-    createLock();
     const httpServer = createServer(async (req, res) => {
         // Log de depuración para rastrear ruteo
         if (!req.url.startsWith('/_next') && !req.url.includes('/static')) {
@@ -334,7 +315,6 @@ app.prepare().then(() => {
             }
         }
 
-        removeLock();
         process.exit(0);
     };
 
