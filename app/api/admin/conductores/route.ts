@@ -71,9 +71,16 @@ async function postHandler(req: NextRequest) {
     } catch (error: any) {
         console.error("[ADMIN/CONDUCTORES POST] Error:", error);
         if (error.code === 11000) {
-            return NextResponse.json({ ok: false, error: "Este número de teléfono ya está registrado en esta línea" }, { status: 409 });
+            const keyPattern = error.keyPattern || {};
+            if (keyPattern.cedula) {
+                return NextResponse.json({ ok: false, error: "Esta cédula ya está registrada para otro conductor en esta línea" }, { status: 409 });
+            }
+            if (keyPattern.telefono) {
+                return NextResponse.json({ ok: false, error: "Este número de teléfono ya está registrado en esta línea" }, { status: 409 });
+            }
+            return NextResponse.json({ ok: false, error: "Ya existe un registro duplicado con estos datos" }, { status: 409 });
         }
-        return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
+        return NextResponse.json({ ok: false, error: "Error interno en el servidor" }, { status: 500 });
     }
 }
 

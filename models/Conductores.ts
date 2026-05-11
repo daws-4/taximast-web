@@ -71,7 +71,14 @@ const ConductoresSchema = new mongoose.Schema<IConductor>(
 );
 
 // Índice compuesto: la cédula es el identificador único por línea para permitir socios sin teléfono
-ConductoresSchema.index({ linea: 1, cedula: 1 }, { unique: true });
+// Se usa un índice parcial para permitir múltiples conductores sin cédula (null) en la misma línea
+ConductoresSchema.index(
+    { linea: 1, cedula: 1 }, 
+    { 
+        unique: true, 
+        partialFilterExpression: { cedula: { $type: "string" } } 
+    }
+);
 // Índice para búsquedas por teléfono (no único para permitir múltiples vacíos o duplicados temporales)
 ConductoresSchema.index({ linea: 1, telefono: 1 });
 // Índice para listar conductores activos de una línea

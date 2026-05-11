@@ -31,25 +31,46 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
             }
         }
 
-        const body = await req.json();
+        let body: Record<string, unknown>;
+        try {
+            body = await req.json();
+        } catch {
+            return NextResponse.json({ ok: false, error: "El cuerpo de la solicitud está vacío o no es JSON válido" }, { status: 400 });
+        }
         const updateData: Record<string, unknown> = {};
+        const unsetData: Record<string, ""  > = {};
 
-        if (body.nombre !== undefined) updateData.nombre = body.nombre.trim();
-        if (body.cedula !== undefined) updateData.cedula = body.cedula?.trim() || undefined;
-        if (body.telefono !== undefined) updateData.telefono = body.telefono.trim();
-        if (body.unidad !== undefined) updateData.unidad = body.unidad?.trim() || undefined;
-        if (body.foto_identificacion !== undefined) updateData.foto_identificacion = body.foto_identificacion;
+        // Campos de texto: si vienen vacíos los eliminamos del documento, si tienen valor los actualizamos
+        const textFields: Array<keyof typeof body> = ['nombre', 'cedula', 'telefono', 'control', 'placa', 'notas', 'foto_identificacion'];
+        for (const field of textFields) {
+            if (body[field] !== undefined) {
+                const val = typeof body[field] === 'string' ? body[field].trim() : body[field];
+                if (val === '' || val === null) {
+                    unsetData[field as string] = "";
+                } else {
+                    updateData[field as string] = val;
+                }
+            }
+        }
+
         if (body.activo !== undefined) updateData.activo = body.activo;
-        if (body.notas !== undefined) updateData.notas = body.notas?.trim() || undefined;
 
         // Admin global puede cambiar la línea
-        if (user.rol === "admin" && body.linea !== undefined) {
+        if (user.rol === 'admin' && typeof body.linea === 'string' && body.linea) {
             updateData.linea = new mongoose.Types.ObjectId(body.linea);
+        }
+
+        const mongoUpdate: Record<string, unknown> = {};
+        if (Object.keys(updateData).length > 0) mongoUpdate.$set = updateData;
+        if (Object.keys(unsetData).length > 0) mongoUpdate.$unset = unsetData;
+
+        if (Object.keys(mongoUpdate).length === 0) {
+            return NextResponse.json({ ok: true, data: conductorActual }, { status: 200 });
         }
 
         const conductor = await ConductoresModel.findByIdAndUpdate(
             id,
-            { $set: updateData },
+            mongoUpdate,
             { returnDocument: 'after', runValidators: true }
         ).populate("linea", "name");
 
@@ -57,7 +78,14 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
     } catch (error: any) {
         console.error("[ADMIN/CONDUCTORES PATCH] Error:", error);
         if (error.code === 11000) {
-            return NextResponse.json({ ok: false, error: "Este número de teléfono ya está registrado en esta línea" }, { status: 409 });
+            const keyPattern = error.keyPattern || {};
+            if (keyPattern.cedula) {
+                return NextResponse.json({ ok: false, error: "Esta cédula ya está registrada para otro conductor en esta línea" }, { status: 409 });
+            }
+            if (keyPattern.telefono) {
+                return NextResponse.json({ ok: false, error: "Este número de teléfono ya está registrado en esta línea" }, { status: 409 });
+            }
+            return NextResponse.json({ ok: false, error: "Ya existe un registro duplicado con estos datos" }, { status: 409 });
         }
         return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
     }

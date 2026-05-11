@@ -122,20 +122,6 @@
     "updatedAt": "2026-05-10T16:18:23.680Z"
   },
   {
-    "_id": "6a00afcf7f66d00a81ec2a78",
-    "cedula": "12.973.201",
-    "linea": "69fb5204f56b0285976f887f",
-    "__v": 0,
-    "activo": true,
-    "control": "103",
-    "createdAt": "2026-05-10T16:18:23.753Z",
-    "nombre": "CARMEN VICTORIA MANJARREZ DE SEQUEDA",
-    "notas": "",
-    "telefono": "+584247384419",
-    "unidad": "103",
-    "updatedAt": "2026-05-10T16:18:23.753Z"
-  },
-  {
     "_id": "6a00afcf7f66d00a81ec2a79",
     "cedula": "13792084",
     "linea": "69fb5204f56b0285976f887f",
@@ -983,20 +969,6 @@
     "telefono": "+584122443281",
     "unidad": "200",
     "updatedAt": "2026-05-10T16:18:30.475Z"
-  },
-  {
-    "_id": "6a00afd67f66d00a81ec2abd",
-    "linea": "69fb5204f56b0285976f887f",
-    "cedula": "15.501.502",
-    "__v": 0,
-    "activo": true,
-    "control": "103",
-    "createdAt": "2026-05-10T16:18:30.690Z",
-    "nombre": "OSCAR JOHAN VIVAS BERBESI",
-    "notas": "",
-    "telefono": "+584247491442",
-    "unidad": "103",
-    "updatedAt": "2026-05-10T16:18:30.690Z"
   },
   {
     "_id": "6a00afd77f66d00a81ec2abe",
