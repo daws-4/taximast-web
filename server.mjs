@@ -94,6 +94,8 @@ app.prepare().then(() => {
                     }
                 }
 
+                /* 
+                // ── SEGURIDAD ANTI-SPAM (DESACTIVADO MOMENTÁNEAMENTE) ────────
                 if (!targetPeer) {
                     res.writeHead(403, { "Content-Type": "application/json" });
                     return res.end(JSON.stringify({ 
@@ -101,13 +103,18 @@ app.prepare().then(() => {
                         error: "No se puede enviar mensaje por Telegram a este número por razones de seguridad (Usuario no es contacto ni tiene historial)." 
                     }));
                 }
+                */
+
+                // Si no se encontró el peer, intentamos usar el destino normalizado directamente
+                // ADVERTENCIA: Esto puede causar que Telegram banee la cuenta si se detecta como spam.
+                const finalTarget = targetPeer || normalizedTarget;
 
                 console.log(`[OUT - TG] Enviando a: ${normalizedTarget} | Mensaje: ${message.substring(0, 50)}${message.length > 50 ? "..." : ""}`);
                 
                 if (mediaUrl) {
                     try {
                         console.log(`[OUT - TG] Intentando enviar archivo: ${mediaUrl}`);
-                        await tgClient.sendFile(targetPeer, { 
+                        await tgClient.sendFile(finalTarget, { 
                             file: mediaUrl, 
                             caption: message,
                             workers: 1
@@ -115,10 +122,10 @@ app.prepare().then(() => {
                         console.log(`[OUT - TG] Media enviado exitosamente a ${normalizedTarget}`);
                     } catch (sendErr) {
                         console.error(`[OUT - TG] Fallo al enviar media: ${sendErr.message}. Reintentando como texto...`);
-                        await tgClient.sendMessage(targetPeer, { message });
+                        await tgClient.sendMessage(finalTarget, { message });
                     }
                 } else {
-                    await tgClient.sendMessage(targetPeer, { message });
+                    await tgClient.sendMessage(finalTarget, { message });
                     console.log(`[OUT - TG] Mensaje de texto enviado exitosamente a ${normalizedTarget}`);
                 }
 
