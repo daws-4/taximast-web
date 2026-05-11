@@ -40,8 +40,12 @@ app.prepare().then(() => {
 
                 const tgClient = global.telegramClients?.get(line_id);
                 if (!tgClient || !tgClient.connected) {
+                    const lastError = global.telegramErrors?.get(line_id) || "Cliente desconectado o no inicializado";
                     res.writeHead(500, { "Content-Type": "application/json" });
-                    return res.end(JSON.stringify({ success: false, error: "Cliente Telegram inactivo para esta línea" }));
+                    return res.end(JSON.stringify({ 
+                        success: false, 
+                        error: `Cliente Telegram inactivo para esta línea. Detalle: ${lastError}` 
+                    }));
                 }
 
                 const isPotentialPhone = (phone.length >= 10 && (phone.startsWith("58") || phone.startsWith("0") || phone.startsWith("+")));
@@ -127,6 +131,24 @@ app.prepare().then(() => {
             }
         }
 
+        // ── Ruta interna: Recarga de cliente Telegram ────────────────────
+        if (req.method === "POST" && req.url === "/internal/telegram/reload") {
+            try {
+                const body = await parseJSON(req);
+                const { line_id } = body;
+                if (!line_id) throw new Error("Falta line_id");
+
+                // Ejecutar en segundo plano para no bloquear el HTTP
+                reloadTelegramClient(line_id);
+
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: true, message: "Recarga iniciada" }));
+            } catch (error) {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        }
+
         // ── Handler por defecto: Next.js ──────────────────────────────
         handle(req, res);
     });
@@ -144,6 +166,48 @@ app.prepare().then(() => {
 
     // ── TELEGRAM: Almacén de clientes activos ─────────────────────────
     global.telegramClients = new Map();
+    global.telegramErrors = new Map();
+
+    async function reloadTelegramClient(lineId) {
+        try {
+            console.log(`[Telegram] Recargando cliente para línea: ${lineId}`);
+            
+            // 1. Limpiar cliente anterior si existe
+            const existingClient = global.telegramClients.get(lineId);
+            if (existingClient) {
+                try { await existingClient.disconnect(); } catch (e) {}
+                global.telegramClients.delete(lineId);
+            }
+            global.telegramErrors.delete(lineId);
+
+            // 2. Buscar datos de la línea
+            const Lineas = mongoose.model("Lineas");
+            const linea = await Lineas.findById(lineId).select("+telegram_api_id +telegram_api_hash +telegram_session +gemini_api_key +gemini_prompt");
+            
+            if (!linea || !linea.activa || !linea.telegram_session || !linea.telegram_api_id) {
+                console.log(`[Telegram] Línea ${lineId} no elegible para Telegram (inactiva o falta config).`);
+                return;
+            }
+
+            // 3. Crear y conectar nuevo cliente
+            const session = new StringSession(linea.telegram_session);
+            const client = new TelegramClient(
+                session,
+                parseInt(linea.telegram_api_id),
+                linea.telegram_api_hash,
+                { connectionRetries: 3 }
+            );
+
+            await client.connect();
+            console.log(`✅ [Telegram] Conectado para línea: ${linea.name}`);
+
+            global.telegramClients.set(lineId, client);
+            setupTelegramInbound(client, linea, global.io);
+        } catch (err) {
+            console.error(`❌ [Telegram] Error conectando línea ${lineId}:`, err.message);
+            global.telegramErrors.set(lineId, err.message);
+        }
+    }
 
     async function initTelegramClients() {
         try {
@@ -188,23 +252,7 @@ app.prepare().then(() => {
             }).select("+telegram_api_id +telegram_api_hash +telegram_session +gemini_api_key +gemini_prompt");
 
             for (const linea of lineas) {
-                try {
-                    const session = new StringSession(linea.telegram_session);
-                    const client = new TelegramClient(
-                        session,
-                        parseInt(linea.telegram_api_id),
-                        linea.telegram_api_hash,
-                        { connectionRetries: 5 }
-                    );
-
-                    await client.connect();
-                    console.log(`✅ [Telegram] Conectado para línea: ${linea.name}`);
-
-                    global.telegramClients.set(linea._id.toString(), client);
-                    setupTelegramInbound(client, linea, io);
-                } catch (err) {
-                    console.error(`❌ [Telegram] Error conectando línea ${linea.name}:`, err.message);
-                }
+                await reloadTelegramClient(linea._id.toString());
             }
 
             if (lineas.length === 0) {

@@ -79,6 +79,16 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
 
         await linea.save();
 
+        // Notificar al motor de Telegram si la línea tiene Telegram configurado
+        if (linea.isTelegramConfigured) {
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+            fetch(`${baseUrl}/internal/telegram/reload`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ line_id: id })
+            }).catch(err => console.error("[LINEA-RELOAD] Error notificando al motor:", err));
+        }
+
         return NextResponse.json({ ok: true, data: { _id: linea._id, name: linea.name } });
     } catch (error: any) {
         console.error("[ADMIN/LINEAS PATCH] Error:", error);
