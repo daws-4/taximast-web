@@ -325,12 +325,20 @@ app.prepare().then(() => {
     process.on("SIGTERM", shutdown);
 });
 
-// Helper: variantes de teléfono para búsqueda de conductores
+// Helper: normaliza un teléfono quitando el '+' y espacios para consistencia E.164 puro
+function normalizePhoneTG(phone) {
+    if (!phone) return phone;
+    return phone.replace(/\D/g, ""); // Quita todo excepto dígitos (incluye el '+')
+}
+
+// Helper: devuelve todas las variantes posibles de un teléfono (con y sin '+', con y sin código de país)
+// para búsquedas en BD que puedan tener distintos formatos almacenados
 function getPhoneVariantsTG(phone) {
-    let p = phone.replace(/\D/g, "");
+    let p = phone.replace(/\D/g, ""); // Strip todo no-dígito
     let norm = p;
     if (p.startsWith("58")) norm = p.slice(2);
     else if (p.startsWith("0")) norm = p.slice(1);
+    // Devuelve variantes: sin '+', con '+', con código de país, sin código de país, con 0 local
     return [p, norm, `0${norm}`, `58${norm}`, `+${p}`, `+58${norm}`];
 }
 
@@ -346,9 +354,10 @@ function setupTelegramInbound(tgClient, lineaData, io) {
             if (!text || !senderId) return;
 
             const sender = await message.getSender();
-            const rawPhone = sender?.phone ? sender.phone.replace(/\D/g, "") : null;
-            // Telegram: normalizar SIN + para consistencia con WhatsApp (E.164 puro)
-            const phone = rawPhone || senderId; 
+            // Normalizar: quitar '+' y no-dígitos → E.164 puro (sin prefijo '+')
+            const rawPhone = sender?.phone ? normalizePhoneTG(sender.phone) : null;
+            // phone: si hay teléfono real lo usamos normalizado; si no, usamos el senderId numérico
+            const phone = rawPhone || senderId;
             const senderName = sender?.firstName
                 ? `${sender.firstName}${sender.lastName ? " " + sender.lastName : ""}`
                 : "Usuario TG";
@@ -376,33 +385,38 @@ function setupTelegramInbound(tgClient, lineaData, io) {
                 tg_peer_id: senderId,
             };
 
-            // 1. Intentar buscar por tg_user_id (más fiable)
+            // Variantes del teléfono para búsqueda tolerante a formato (con y sin '+')
+            const phoneVariants = rawPhone ? getPhoneVariantsTG(rawPhone) : [];
+
+            // 1. Intentar buscar por tg_user_id (más fiable, no depende de formato de teléfono)
             let chat = await Chats.findOne({
                 linea: lineaId,
                 platform: "telegram",
                 tg_user_id: senderId,
             });
 
-            // Si lo encontramos por UID, asegurar que el teléfono esté actualizado (si antes era solo el UID)
-            if (chat && rawPhone && chat.cliente_phone !== rawPhone) {
-                console.log(`[TG-UPDATE] Actualizando teléfono de chat ${chat._id}: ${chat.cliente_phone} -> ${rawPhone}`);
-                chat.cliente_phone = rawPhone;
+            // Si lo encontramos por UID, asegurar que el teléfono esté normalizado (sin '+')
+            if (chat && rawPhone) {
+                const normalizedStored = normalizePhoneTG(chat.cliente_phone || "");
+                if (normalizedStored !== rawPhone) {
+                    console.log(`[TG-UPDATE] Normalizando/actualizando teléfono de chat ${chat._id}: "${chat.cliente_phone}" → "${rawPhone}"`);
+                    chat.cliente_phone = rawPhone;
+                }
             }
 
-            // 2. Si no existe, intentar buscar por teléfono (por si el chat se creó antes o de otra forma)
-            if (!chat && rawPhone) {
+            // 2. Si no existe por UID, buscar por teléfono en todas sus variantes (con y sin '+')
+            if (!chat && phoneVariants.length > 0) {
                 chat = await Chats.findOne({
                     linea: lineaId,
                     platform: "telegram",
-                    cliente_phone: { $in: [phone, `+${phone}`] },
+                    cliente_phone: { $in: phoneVariants },
                 });
-                
-                // Si lo encontramos por teléfono, le asignamos el UID y normalizamos el teléfono si tenía el '+'
+
+                // Si lo encontramos por teléfono, asignar UID y normalizar el teléfono almacenado
                 if (chat) {
+                    console.log(`[TG-MERGE] Chat encontrado por teléfono ("${chat.cliente_phone}") → asignando tg_user_id ${senderId} y normalizando`);
                     chat.tg_user_id = senderId;
-                    if (chat.cliente_phone.startsWith("+")) {
-                        chat.cliente_phone = chat.cliente_phone.replace("+", "");
-                    }
+                    chat.cliente_phone = rawPhone; // Guardar siempre en formato E.164 puro (sin '+')
                 }
             }
 

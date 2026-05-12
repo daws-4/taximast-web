@@ -100,6 +100,9 @@ export async function POST(req: NextRequest) {
             // Eliminar cualquier enlace de Google Maps y la " A " ocasional que lo precede
             finalMessage = finalMessage.replace(/\s*(?:A\s+)?https?:\/\/(?:www\.)?(?:maps\.google\.com|goo\.gl|maps\.app\.goo\.gl)[^\s]*/gi, '').trim();
 
+            // Eliminar el número de teléfono del cliente (ej: "TEL: 584120691296") del mensaje al chófer
+            finalMessage = finalMessage.replace(/\s*TEL:\s*\+?\d+/gi, '').trim();
+
             // 3.0 RESTRICCIÓN TELEGRAM: Validar que el chófer exista si la plataforma es Telegram
             const driverPhoneVariants = getPhoneVariants(phone);
             console.log(`[dispatch-telegram] Buscando chófer: ${phone} | Variantes: ${JSON.stringify(driverPhoneVariants)} | LineaID: ${linea._id}`);
