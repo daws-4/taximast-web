@@ -73,14 +73,17 @@ app.prepare().then(() => {
                         const phoneToImport = normalizedTarget;
                         
                         try {
+                            // Primero intentamos importar con datos mínimos para que Telegram resuelva el usuario.
+                            // Si el número tiene Telegram, la respuesta traerá el nombre real del usuario.
+                            // No usamos "Cliente Taximast" para no contaminar la libreta de contactos.
                             const result = await tgClient.invoke(
                                 new Api.contacts.ImportContacts({
                                     contacts: [
                                         new Api.InputPhoneContact({
                                             clientId: BigInt(Date.now()),
                                             phone: phoneToImport,
-                                            firstName: "Cliente",
-                                            lastName: "Taximast"
+                                            firstName: phoneToImport, // Placeholder mínimo, Telegram lo reemplaza con el nombre real
+                                            lastName: ""
                                         })
                                     ]
                                 })
@@ -88,7 +91,9 @@ app.prepare().then(() => {
                             
                             if (result.users && result.users.length > 0) {
                                 targetPeer = result.users[0];
-                                console.log(`[OUT - TG] Contacto importado exitosamente para ${phoneToImport}`);
+                                // Usar el nombre real que tiene Telegram para este usuario
+                                const realName = [targetPeer.firstName, targetPeer.lastName].filter(Boolean).join(" ").trim();
+                                console.log(`[OUT - TG] Contacto resuelto para ${phoneToImport}: nombre="${realName || phoneToImport}"`);
                             }
                         } catch (importErr) {
                             console.error(`[OUT - TG] Error crítico al importar contacto: ${importErr.message}`);
@@ -96,20 +101,18 @@ app.prepare().then(() => {
                     }
                 }
 
-                /* 
-                // ── SEGURIDAD ANTI-SPAM (DESACTIVADO MOMENTÁNEAMENTE) ────────
+                // ── SEGURIDAD ANTI-SPAM ──────────────────────────────────────
+                // Si no se pudo resolver el peer, bloqueamos el envío para proteger la cuenta.
                 if (!targetPeer) {
+                    console.warn(`[OUT - TG] Bloqueado: No se pudo resolver peer para ${normalizedTarget}. El número puede no tener Telegram.`);
                     res.writeHead(403, { "Content-Type": "application/json" });
                     return res.end(JSON.stringify({ 
                         success: false, 
-                        error: "No se puede enviar mensaje por Telegram a este número por razones de seguridad (Usuario no es contacto ni tiene historial)." 
+                        error: "No se puede enviar por Telegram: el número no tiene cuenta de Telegram o no es un contacto conocido." 
                     }));
                 }
-                */
 
-                // Si no se encontró el peer, intentamos usar el destino normalizado directamente
-                // ADVERTENCIA: Esto puede causar que Telegram banee la cuenta si se detecta como spam.
-                const finalTarget = targetPeer || normalizedTarget;
+                const finalTarget = targetPeer;
 
                 console.log(`[OUT - TG] Enviando a: ${normalizedTarget} | Mensaje: ${message.substring(0, 50)}${message.length > 50 ? "..." : ""}`);
                 
