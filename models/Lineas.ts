@@ -21,6 +21,9 @@ export interface ILinea extends Document {
     gemini_prompt?: string;
     tokens_input_consumed?: number;
     tokens_output_consumed?: number;
+    // Respuesta automática (alternativa excluyente a la IA)
+    auto_reply_activo?: boolean;
+    auto_reply_mensaje?: string;
     activa: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -135,6 +138,18 @@ const LineasSchema = new mongoose.Schema<ILinea>(
         tokens_output_consumed: {
             type: Number,
             default: 0,
+        },
+        // ── Respuesta Automática ────────────────────────────────────────────
+        // Activa el envío automático de un mensaje fijo al cliente (mutuamente excluyente con IA)
+        auto_reply_activo: {
+            type: Boolean,
+            default: false,
+        },
+        // Texto del mensaje automático que se enviará al cliente
+        auto_reply_mensaje: {
+            type: String,
+            trim: true,
+            select: false,
         },
         // Indica si la línea está operativa en el sistema
         activa: {

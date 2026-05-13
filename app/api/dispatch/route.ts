@@ -128,6 +128,9 @@ export async function POST(req: NextRequest) {
         }
 
         if (type === 'dispatch_client') {
+            // Eliminar el número de teléfono del chófer del mensaje al cliente (ej: "TEL. CHOFER: 584247315840")
+            finalMessage = finalMessage.replace(/\s*TEL\.?\s*(?:CHOFER)?:?\s*\+?\d+/gi, '').trim();
+
             // Extraer el teléfono del conductor directamente del objeto 'conductor' si FoxPro lo incluyó
             let targetDriverPhone = conductor?.numero || conductor?.phone || driver?.phone;
             
@@ -237,7 +240,8 @@ export async function POST(req: NextRequest) {
                     line_id,
                     phone: destPhone,
                     message: finalMessage,
-                    mediaUrl: sentAsImage ? photoUrl : null
+                    mediaUrl: sentAsImage ? photoUrl : null,
+                    type: type // Pasamos el tipo (dispatch_driver) para saltar bloqueos en server.mjs
                 }),
             });
 

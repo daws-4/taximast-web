@@ -128,7 +128,7 @@ async function processWebhook(body: Record<string, any>) {
     // 2. Identificar la línea por phone_number_id
         const linea = await LineasModel
             .findOne({ phone_number_id: phoneNumberId })
-            .select('+phone_number_id +access_token +gemini_api_key +gemini_prompt')
+            .select('+phone_number_id +access_token +gemini_api_key +gemini_prompt +ia_activa +auto_reply_activo +auto_reply_mensaje')
             .lean();
 
     if (!linea) {
@@ -315,12 +315,84 @@ async function processWebhook(body: Record<string, any>) {
             }
         }
 
-        // 7. Integración de Inteligencia Artificial (Gemini)
-        // Solo respondemos si hay API Key, el chat NO es de un conductor,
-        // y el chat NO está siendo atendido por un humano.
+        // 7. Integración de Inteligencia Artificial (Gemini) O Respuesta Automática
         let aiReplied = false;
         const isConductorChat = chat.tipo_chat === 'conductor';
-        const iaHabilitada = linea.gemini_api_key && linea.ia_activa !== false;
+
+        // 7a. PRIORIDAD: Respuesta Automática (si está activa y configurada)
+        const autoReplyHabilitado = linea.auto_reply_activo && linea.auto_reply_mensaje;
+        if (autoReplyHabilitado && !isConductorChat && chat.estado !== 'en_atencion') {
+            console.log(`[webhook] Enviando respuesta automática para ${clientePhone}...`);
+            try {
+                const now = new Date();
+                const replyText = linea.auto_reply_mensaje;
+
+                const metaRes = await fetch(`https://graph.facebook.com/v21.0/${linea.phone_number_id}/messages`, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${linea.access_token}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        messaging_product: "whatsapp",
+                        to: clientePhone,
+                        type: "text",
+                        text: { body: replyText },
+                    }),
+                });
+
+                const metaData = await metaRes.json();
+                const wa_message_id = metaData?.messages?.[0]?.id;
+
+                const autoMensaje = {
+                    _id: new mongoose.Types.ObjectId(),
+                    origen: 'sistema' as const,
+                    texto: replyText,
+                    timestamp: now,
+                    leido: true,
+                    estado: 'enviado' as const,
+                    wa_message_id: wa_message_id,
+                };
+
+                chat.mensajes.push(autoMensaje as any);
+                chat.ultimoMensaje = autoMensaje.timestamp;
+
+                if (chat.estado === 'pendiente' || wasReopened) {
+                    chat.estado = 'bot_atendiendo';
+                }
+
+                await chat.save();
+                aiReplied = true;
+
+                // Emitir la burbuja al chat abierto
+                if (io && !isNew) {
+                    io.to(`chat:${chatId}`).emit('chat:nuevo_mensaje', {
+                        chatId,
+                        mensaje: {
+                            _id: autoMensaje._id.toString(),
+                            origen: autoMensaje.origen,
+                            texto: autoMensaje.texto,
+                            timestamp: autoMensaje.timestamp.toISOString(),
+                            estado: autoMensaje.estado,
+                        },
+                    });
+                }
+
+                // Notificar cambio de estado al sidebar
+                if (io) {
+                    io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:estado_cambiado', {
+                        chatId,
+                        estado: chat.estado,
+                    });
+                }
+            } catch (error) {
+                console.error("[webhook] Error enviando respuesta automática:", error);
+            }
+        }
+
+        // 7b. SEGUNDA OPCIÓN: Inteligencia Artificial (Gemini)
+        // Solo respondemos si NO se envió auto-reply, hay API Key, etc.
+        const iaHabilitada = !aiReplied && linea.gemini_api_key && linea.ia_activa !== false;
         if (iaHabilitada && !isConductorChat && chat.estado !== 'en_atencion') {
             console.log(`[gemini] Generando respuesta para ${clientePhone}...`);
             const aiResult = await getGeminiReply({

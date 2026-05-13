@@ -1,0 +1,252 @@
+[{
+  "_id": {
+    "$oid": "69bae8a40c397cc66025f08c"
+  },
+  "nombre": "David Villamizar",
+  "telefono": "+584120691296",
+  "email": "villamizarandresdavid@gmail.com",
+  "ubicacion": "San Cristóbal, Estado Táchira",
+  "detalle_solicitud": "Más información sobre el servicio",
+  "ip_address": "::1",
+  "createdAt": {
+    "$date": "2026-03-18T18:02:12.325Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-18T18:02:12.325Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcb93f83ae61bd7f94749e"
+  },
+  "nombre": "daco",
+  "telefono": "04126463479",
+  "email": "jdcg2709@gmail.com",
+  "ubicacion": "san cristobal",
+  "detalle_solicitud": "que horario trabajan",
+  "ip_address": "167.249.35.97",
+  "createdAt": {
+    "$date": "2026-03-20T03:04:31.192Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:04:31.192Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcb94f83ae61bd7f9474a5"
+  },
+  "nombre": "Ale Alvarez",
+  "telefono": "04247042556",
+  "email": "alvarezalexandra55@gmail.com",
+  "ubicacion": "san cristobal",
+  "detalle_solicitud": "hola",
+  "ip_address": "190.153.67.190",
+  "createdAt": {
+    "$date": "2026-03-20T03:04:47.468Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:04:47.468Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbcb183ae61bd7f9474a9"
+  },
+  "nombre": "Maria José",
+  "telefono": "041696328",
+  "email": "hola@gmail.com",
+  "ubicacion": "San cristobal, tachira",
+  "detalle_solicitud": "Hola",
+  "ip_address": "186.165.167.138",
+  "createdAt": {
+    "$date": "2026-03-20T03:19:13.709Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:19:13.709Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbcd383ae61bd7f9474ad"
+  },
+  "nombre": "Carlos",
+  "telefono": "04126985237",
+  "email": "holaychao@gmail.com",
+  "ubicacion": "San cristobal, tachira",
+  "detalle_solicitud": "Chao",
+  "ip_address": "186.165.167.138",
+  "createdAt": {
+    "$date": "2026-03-20T03:19:47.551Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:19:47.551Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbd0f83ae61bd7f9474b1"
+  },
+  "nombre": "Maria José",
+  "telefono": "041256859",
+  "email": "holanome@gmail.com",
+  "ubicacion": "San cristobal, tachira",
+  "detalle_solicitud": "A que horas trabajan",
+  "ip_address": "186.165.167.138",
+  "createdAt": {
+    "$date": "2026-03-20T03:20:47.469Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:20:47.469Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbd4883ae61bd7f9474b5"
+  },
+  "nombre": "Miguel angel Alvarez c.",
+  "telefono": "04247683873",
+  "email": "ma2c2001@gmail.com",
+  "ubicacion": "Pueblo nuevo",
+  "detalle_solicitud": "Hola",
+  "ip_address": "190.153.67.23",
+  "createdAt": {
+    "$date": "2026-03-20T03:21:44.614Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:21:44.614Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbe9683ae61bd7f9474bf"
+  },
+  "nombre": "Arturo Alvarez",
+  "telefono": "04247198290",
+  "email": "utrerarturo0307@gmail.com",
+  "ubicacion": "San Cristóbal, tachira",
+  "detalle_solicitud": "Me gustaría saber cómo puedo empezar a trabajar y qué beneficios ofrece",
+  "ip_address": "190.77.129.49",
+  "createdAt": {
+    "$date": "2026-03-20T03:27:18.784Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:27:18.784Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbf6e83ae61bd7f9474c5"
+  },
+  "nombre": "Sairi",
+  "telefono": "04243336298",
+  "email": "alexandrazambrano23@gmail.com",
+  "ubicacion": "Táchira",
+  "detalle_solicitud": "Hola.",
+  "ip_address": "2a02:6ea0:c10d:5485::15",
+  "createdAt": {
+    "$date": "2026-03-20T03:30:54.849Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:30:54.849Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbfd583ae61bd7f9474c9"
+  },
+  "nombre": "Carlos Jesus",
+  "telefono": "04136998123",
+  "email": "holaaa@hotmail.com",
+  "ubicacion": "Palo Gordo",
+  "detalle_solicitud": "Servirá?",
+  "ip_address": "2a02:6ea0:c10d:5485::15",
+  "createdAt": {
+    "$date": "2026-03-20T03:32:37.325Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:32:37.325Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcbffb83ae61bd7f9474cd"
+  },
+  "nombre": "Yanis",
+  "telefono": "04261237896",
+  "email": "yanis@gmai.com",
+  "ubicacion": "Palo gordo",
+  "detalle_solicitud": "Sirve",
+  "ip_address": "2a02:6ea0:c10d:5485::15",
+  "createdAt": {
+    "$date": "2026-03-20T03:33:15.320Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:33:15.320Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcc0f783ae61bd7f9474d1"
+  },
+  "nombre": "Jhoneison Alvarez",
+  "telefono": "04141536852",
+  "email": "montaalvarez@gmail.com",
+  "ubicacion": "San Cristóbal, tachira",
+  "detalle_solicitud": "Cómo funciona?",
+  "ip_address": "190.77.129.49",
+  "createdAt": {
+    "$date": "2026-03-20T03:37:27.142Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:37:27.142Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcc13e83ae61bd7f9474d5"
+  },
+  "nombre": "Sebastián colmenares",
+  "telefono": "042418290354",
+  "email": "colmseb@gmail.com",
+  "ubicacion": "San Cristóbal, tachira",
+  "detalle_solicitud": "Funciona solo en la ciudad de sc?",
+  "ip_address": "190.77.129.49",
+  "createdAt": {
+    "$date": "2026-03-20T03:38:38.333Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:38:38.333Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69bcc32683ae61bd7f9474e3"
+  },
+  "nombre": "Ingry",
+  "telefono": "+58 412-6457903",
+  "email": "zingry@hotmail.com",
+  "ubicacion": "Santa Teresa",
+  "detalle_solicitud": "La página es muy práctica . La recomiendo",
+  "ip_address": "2a09:bac3:303e:2678::3d5:74",
+  "createdAt": {
+    "$date": "2026-03-20T03:46:46.794Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-20T03:46:46.794Z"
+  },
+  "__v": 0
+}]

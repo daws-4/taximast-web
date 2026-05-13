@@ -38,7 +38,8 @@ app.prepare().then(() => {
         if (req.method === "POST" && req.url === "/internal/telegram/send") {
             try {
                 const body = await parseJSON(req);
-                const { line_id, phone, message, mediaUrl } = body;
+                const { line_id, phone, message, mediaUrl, type } = body;
+                const isDriver = type === 'dispatch_driver';
 
                 const tgClient = global.telegramClients?.get(line_id);
                 if (!tgClient || !tgClient.connected) {
@@ -103,7 +104,8 @@ app.prepare().then(() => {
 
                 // ── SEGURIDAD ANTI-SPAM ──────────────────────────────────────
                 // Si no se pudo resolver el peer, bloqueamos el envío para proteger la cuenta.
-                if (!targetPeer) {
+                // EXCEPCIÓN: Los chóferes (dispatch_driver) se envían directamente por teléfono/ID sin validación.
+                if (!targetPeer && !isDriver) {
                     console.warn(`[OUT - TG] Bloqueado: No se pudo resolver peer para ${normalizedTarget}. El número puede no tener Telegram.`);
                     res.writeHead(403, { "Content-Type": "application/json" });
                     return res.end(JSON.stringify({ 
@@ -112,7 +114,8 @@ app.prepare().then(() => {
                     }));
                 }
 
-                const finalTarget = targetPeer;
+                // Si es driver y no tenemos peer, usamos el target normalizado directamente
+                const finalTarget = targetPeer || normalizedTarget;
 
                 console.log(`[OUT - TG] Enviando a: ${normalizedTarget} | Mensaje: ${message.substring(0, 50)}${message.length > 50 ? "..." : ""}`);
                 
@@ -251,6 +254,8 @@ app.prepare().then(() => {
                     telegram_session: { type: String, select: false },
                     gemini_api_key: { type: String, select: false },
                     gemini_prompt: { type: String, select: false },
+                    auto_reply_activo: { type: Boolean, default: false },
+                    auto_reply_mensaje: { type: String, select: false },
                 }, { strict: false }));
             }
             if (!mongoose.models.Chats) {
@@ -370,8 +375,8 @@ function setupTelegramInbound(tgClient, lineaData, io) {
             const Conductores = mongoose.model("Conductores");
             const now = new Date();
 
-            // Buscar datos actualizados de la línea (por si cambiaron credenciales de IA)
-            const lineaActual = await Lineas.findById(lineaId).select("+gemini_api_key +gemini_prompt +ia_activa");
+            // Buscar datos actualizados de la línea (por si cambiaron credenciales de IA o auto-reply)
+            const lineaActual = await Lineas.findById(lineaId).select("+gemini_api_key +gemini_prompt +ia_activa +auto_reply_activo +auto_reply_mensaje");
             if (!lineaActual) return;
 
             const nuevoMensaje = {
@@ -509,14 +514,84 @@ function setupTelegramInbound(tgClient, lineaData, io) {
                 });
             }
 
-            // IA Fetch (solo si el chat no está bloqueado)
-            const puedeResponderIA = lineaActual.gemini_api_key 
-                && lineaActual.ia_activa !== false
+            // ── LÓGICA DE RESPUESTA AUTOMÁTICA (AUTO-REPLY) ──────────────────
+            let autoReplyEnviado = false;
+            const puedeAutoReply = lineaActual.auto_reply_activo 
+                && lineaActual.auto_reply_mensaje
                 && chat.tipo_chat !== "conductor" 
                 && chat.estado !== "en_atencion"
                 && !chat.bloqueado;
 
-            console.log(`[TG-IA-CHECK] gemini_api_key=${!!lineaActual.gemini_api_key} ia_activa=${lineaActual.ia_activa} tipo_chat=${chat.tipo_chat} estado=${chat.estado} bloqueado=${!!chat.bloqueado} → disparar=${puedeResponderIA}`);
+            if (puedeAutoReply) {
+                console.log(`[TG-AUTO] Enviando respuesta automática para línea ${lineaActual.name}...`);
+                const replyText = lineaActual.auto_reply_mensaje;
+                const destPhone = chat.cliente_phone;
+                const baseUrl = `http://127.0.0.1:${port}`;
+
+                try {
+                    const tgRes = await fetch(`${baseUrl}/internal/telegram/send`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            line_id: lineaId,
+                            phone: destPhone,
+                            message: replyText,
+                        }),
+                    });
+
+                    if (tgRes.ok) {
+                        autoReplyEnviado = true;
+                        const aiMessage = {
+                            _id: new mongoose.Types.ObjectId(),
+                            origen: 'sistema',
+                            texto: replyText,
+                            timestamp: new Date(),
+                            leido: true,
+                            estado: 'enviado',
+                            tipo: 'text',
+                        };
+
+                        chat.mensajes.push(aiMessage);
+                        chat.ultimoMensaje = aiMessage.timestamp;
+                        
+                        if (chat.estado === 'pendiente' || wasReopened) {
+                            chat.estado = 'bot_atendiendo';
+                        }
+                        await chat.save();
+
+                        if (io) {
+                            const mensajePayload = {
+                                _id: aiMessage._id.toString(),
+                                origen: aiMessage.origen,
+                                texto: aiMessage.texto,
+                                timestamp: aiMessage.timestamp.toISOString(),
+                                leido: aiMessage.leido,
+                                estado: aiMessage.estado,
+                                tipo: aiMessage.tipo,
+                            };
+                            io.to(`chat:${chatId}`).emit('chat:nuevo_mensaje', { chatId, mensaje: mensajePayload });
+                            io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:nuevo_mensaje', { chatId, mensaje: mensajePayload });
+                            io.to(`chat:${chatId}`).emit('chat:estado_cambiado', { chatId, estado: chat.estado });
+                            io.to(`linea:${lineaId}`).to('linea:admin').emit('chat:estado_cambiado', { chatId, estado: chat.estado });
+                        }
+                        console.log(`[TG-AUTO] Mensaje enviado con éxito. Cancelando IA.`);
+                        return; // Salir del handler
+                    }
+                } catch (autoErr) {
+                    console.error("[TG-AUTO] Error:", autoErr.message);
+                }
+            }
+
+            // IA Fetch (solo si el chat no está bloqueado, no se envió auto-reply y la IA está activa)
+            const puedeResponderIA = !autoReplyEnviado
+                && lineaActual.gemini_api_key 
+                && lineaActual.ia_activa !== false
+                && lineaActual.auto_reply_activo !== true
+                && chat.tipo_chat !== "conductor" 
+                && chat.estado !== "en_atencion"
+                && !chat.bloqueado;
+
+            console.log(`[TG-IA-CHECK] line=${lineaActual.name} autoReplyEnviado=${autoReplyEnviado} ia_activa=${lineaActual.ia_activa} auto_reply_activo=${lineaActual.auto_reply_activo} → disparar=${puedeResponderIA}`);
             
             if (puedeResponderIA) {
                 try {

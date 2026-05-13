@@ -31,6 +31,8 @@ interface Linea {
     plataforma_despacho?: 'whatsapp' | 'telegram';
     ia_activa?: boolean;
     has_gemini_key?: boolean; // El backend nos indica si hay clave sin exponer el valor
+    auto_reply_activo?: boolean;
+    has_auto_reply?: boolean;
 }
 
 interface Props {
@@ -228,6 +230,8 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
         telegram_phone: linea.telegram_phone || "",
         plataforma_despacho: linea.plataforma_despacho || "whatsapp",
         ia_activa: linea.ia_activa ?? true,
+        auto_reply_activo: linea.auto_reply_activo ?? false,
+        auto_reply_mensaje: "", // Se mantiene vacío al inicio, el backend tiene el real
         activa: linea.activa
     });
 
@@ -291,10 +295,11 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
 
         // Omitimos los campos en blanco para que el backend no los sobreescriba (conserva los originales)
         const payload: Partial<typeof form> = {};
+        const alwaysInclude = ["activa", "ia_activa", "auto_reply_activo"];
         for (const [k, v] of Object.entries(form)) {
-            if (v !== "" && v !== undefined && k !== "activa" && k !== "ia_activa") {
+            if (alwaysInclude.includes(k)) {
                 payload[k as keyof typeof form] = v as never;
-            } else if (k === "activa" || k === "ia_activa") {
+            } else if (v !== "" && v !== undefined) {
                 payload[k as keyof typeof form] = v as never;
             }
         }
@@ -429,7 +434,12 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
                                 <button
                                     type="button"
                                     disabled={!linea.has_gemini_key}
-                                    onClick={() => setForm(f => ({ ...f, ia_activa: !f.ia_activa }))}
+                                    onClick={() => setForm(f => ({ 
+                                        ...f, 
+                                        ia_activa: !f.ia_activa,
+                                        // Si activamos IA, desactivamos auto-reply
+                                        auto_reply_activo: !f.ia_activa ? false : f.auto_reply_activo
+                                    }))}
                                     className="relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
                                     style={{ backgroundColor: (linea.has_gemini_key && form.ia_activa) ? '#4ade80' : `${C.platinum}22` }}
                                     title={!linea.has_gemini_key ? 'Configura una API Key primero' : ''}
@@ -451,6 +461,46 @@ function EditLineaModal({ linea, onClose, onSuccess }: {
                                 placeholder="Ej: Eres el asistente virtual de Taxi El Llano..." 
                             />
                             <p className="text-[10px] mt-1" style={{ color: `${C.platinum}66` }}>Aquí puedes modificar cómo se comporta y qué información utiliza la inteligencia artificial de esta línea.</p>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#fbe134" }}>Respuesta Automática (Auto-Reply)</p>
+                            
+                            <div className="flex items-center gap-3 p-3 rounded-lg mb-3" style={{ backgroundColor: `${C.onyx}80`, border: `1px solid ${form.auto_reply_activo ? '#fbe13433' : '#94a3b833'}` }}>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium" style={{ color: C.platinum }}>Respuesta automática activa</p>
+                                    <p className="text-[10px] mt-0.5" style={{ color: `${C.platinum}55` }}>
+                                        {form.auto_reply_activo 
+                                            ? 'Se enviará un mensaje fijo a los clientes. La IA se desactivará.'
+                                            : 'El mensaje automático está desactivado.'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setForm(f => ({ 
+                                        ...f, 
+                                        auto_reply_activo: !f.auto_reply_activo,
+                                        // Si activamos auto-reply, desactivamos IA
+                                        ia_activa: !f.auto_reply_activo ? false : f.ia_activa 
+                                    }))}
+                                    className="relative w-11 h-6 rounded-full transition-colors shrink-0"
+                                    style={{ backgroundColor: form.auto_reply_activo ? '#fbe134' : `${C.platinum}22` }}
+                                >
+                                    <span
+                                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                        style={{ transform: form.auto_reply_activo ? 'translateX(20px)' : 'translateX(0)' }}
+                                    />
+                                </button>
+                            </div>
+
+                            <TextareaField 
+                                label="Mensaje Automático" 
+                                id="edit-linea-auto-reply-msg" 
+                                value={form.auto_reply_mensaje} 
+                                onChange={set("auto_reply_mensaje")} 
+                                placeholder={linea.has_auto_reply ? "Dejar en blanco para conservar el mensaje actual..." : "Escribe el mensaje que se enviará automáticamente..."}
+                            />
+                            <p className="text-[10px] mt-1" style={{ color: `${C.platinum}66` }}>Este mensaje se envía inmediatamente cuando un cliente escribe, reemplazando a la IA.</p>
                         </div>
                     </div>
                 </div>
@@ -495,7 +545,9 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         name: "", whatsapp_number: "", phone_number_id: "", waba_id: "", access_token: "", verify_token: "", app_secret: "", 
         gemini_api_key: "", gemini_prompt: "",
         telegram_api_id: "", telegram_api_hash: "", telegram_session: "", telegram_phone: "",
-        plataforma_despacho: "whatsapp"
+        plataforma_despacho: "whatsapp",
+        auto_reply_activo: false,
+        auto_reply_mensaje: ""
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -657,6 +709,38 @@ function NewLineaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                                 placeholder="Ej: Eres el asistente virtual amable de Taxi El Llano..." 
                             />
                             <p className="text-[10px] mt-1" style={{ color: `${C.platinum}66` }}>Opcional. Define cómo debe responder el asistente a los clientes.</p>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#fbe134" }}>Respuesta Automática (Auto-Reply)</p>
+                            
+                            <div className="flex items-center gap-3 p-3 rounded-lg mb-3" style={{ backgroundColor: `${C.onyx}80`, border: `1px solid ${form.auto_reply_activo ? '#fbe13433' : '#94a3b833'}` }}>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium" style={{ color: C.platinum }}>Respuesta automática activa</p>
+                                    <p className="text-[10px] mt-0.5" style={{ color: `${C.platinum}55` }}>
+                                        Si se activa, este mensaje tendrá prioridad sobre la IA.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setForm(f => ({ ...f, auto_reply_activo: !f.auto_reply_activo }))}
+                                    className="relative w-11 h-6 rounded-full transition-colors shrink-0"
+                                    style={{ backgroundColor: form.auto_reply_activo ? '#fbe134' : `${C.platinum}22` }}
+                                >
+                                    <span
+                                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                        style={{ transform: form.auto_reply_activo ? 'translateX(20px)' : 'translateX(0)' }}
+                                    />
+                                </button>
+                            </div>
+
+                            <TextareaField 
+                                label="Mensaje Automático" 
+                                id="new-linea-auto-reply-msg" 
+                                value={form.auto_reply_mensaje} 
+                                onChange={set("auto_reply_mensaje")} 
+                                placeholder="Ej: Hola! Gracias por contactarnos. En un momento te atenderemos..." 
+                            />
                         </div>
                     </div>
                 </div>

@@ -13,9 +13,14 @@ export async function POST(req: NextRequest) {
 
         await connectDB();
 
-        const linea = await LineasModel.findById(lineaId).select('+gemini_api_key +gemini_prompt').lean();
+        const linea = await LineasModel.findById(lineaId).select('+gemini_api_key +gemini_prompt +ia_activa +auto_reply_activo').lean();
         if (!linea || !linea.gemini_api_key) {
              return NextResponse.json({ success: false, error: 'Linea sin IA' }, { status: 400 });
+        }
+
+        if (linea.ia_activa === false || linea.auto_reply_activo === true) {
+            console.log(`[tg-ai-reply] IA cancelada: ia_activa=${linea.ia_activa}, auto_reply_activo=${linea.auto_reply_activo}`);
+            return NextResponse.json({ success: false, error: 'IA desactivada o auto-reply activo' }, { status: 400 });
         }
 
         const chat = await ChatsModel.findById(chatId);

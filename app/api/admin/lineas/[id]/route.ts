@@ -65,6 +65,17 @@ async function patchHandler(req: NextRequest, { params }: { params: Promise<{ id
         if (body.activa !== undefined) linea.activa = body.activa;
         if (body.ia_activa !== undefined) (linea as any).ia_activa = body.ia_activa;
 
+        // Nuevos campos de respuesta automática
+        if (body.auto_reply_activo !== undefined) (linea as any).auto_reply_activo = body.auto_reply_activo;
+        if (body.auto_reply_mensaje !== undefined) (linea as any).auto_reply_mensaje = body.auto_reply_mensaje.trim();
+
+        // Lógica de exclusividad: si uno se activa, el otro se desactiva
+        if (body.auto_reply_activo === true) {
+            (linea as any).ia_activa = false;
+        } else if (body.ia_activa === true) {
+            (linea as any).auto_reply_activo = false;
+        }
+
         // Recalcular flags de configuración
         linea.isWhatsappConfigured = Boolean(linea.whatsapp_number && linea.phone_number_id && linea.waba_id && linea.access_token);
         linea.isTelegramConfigured = Boolean(linea.telegram_api_id && linea.telegram_api_hash);

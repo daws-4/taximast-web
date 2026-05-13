@@ -17,16 +17,18 @@ async function getHandler(req: NextRequest) {
 
         const filtro = soloActivas ? { activa: true } : {};
 
-        // Obtiene gemini_api_key para saber si existe, pero no la expone al cliente
+        // Obtiene gemini_api_key y auto_reply_mensaje para saber si existen, pero no los expone al cliente
         const lineas = await LineasModel.find(filtro)
-            .select("-access_token -verify_token -phone_number_id -waba_id +gemini_api_key")
+            .select("-access_token -verify_token -phone_number_id -waba_id +gemini_api_key +auto_reply_mensaje")
             .sort({ createdAt: -1 });
 
-        // Transformar: reemplazar gemini_api_key por has_gemini_key (boolean) para seguridad
+        // Transformar: reemplazar gemini_api_key por has_gemini_key y auto_reply_mensaje por has_auto_reply (boolean) para seguridad
         const lineasSafe = lineas.map(l => {
             const obj = l.toObject() as unknown as Record<string, any>;
             obj.has_gemini_key = Boolean(obj.gemini_api_key);
+            obj.has_auto_reply = Boolean(obj.auto_reply_mensaje);
             delete obj.gemini_api_key;
+            delete obj.auto_reply_mensaje;
             return obj;
         });
 
@@ -47,7 +49,13 @@ async function postHandler(req: NextRequest) {
         await connectDB();
 
         const body = await req.json();
-        const { name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token, app_secret, gemini_api_key, gemini_prompt, telegram_api_id, telegram_api_hash, telegram_session, telegram_phone, plataforma_despacho } = body;
+        const { 
+            name, whatsapp_number, phone_number_id, waba_id, access_token, verify_token, app_secret, 
+            gemini_api_key, gemini_prompt, 
+            telegram_api_id, telegram_api_hash, telegram_session, telegram_phone, 
+            plataforma_despacho,
+            auto_reply_activo, auto_reply_mensaje 
+        } = body;
 
         if (!name) {
             return NextResponse.json(
@@ -73,6 +81,10 @@ async function postHandler(req: NextRequest) {
             isWhatsappConfigured: Boolean(whatsapp_number && phone_number_id && waba_id && access_token),
             isTelegramConfigured: Boolean(telegram_api_id && telegram_api_hash),
             plataforma_despacho: plataforma_despacho || 'whatsapp',
+            auto_reply_activo: Boolean(auto_reply_activo),
+            auto_reply_mensaje: auto_reply_mensaje?.trim() || undefined,
+            // Si el mensaje automático está activo, la IA debe estar desactivada por defecto para evitar conflictos
+            ia_activa: auto_reply_activo ? false : true,
             activa: true,
         });
 
