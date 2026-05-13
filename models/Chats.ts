@@ -164,8 +164,15 @@ ChatsSchema.index({ linea: 1, ultimoMensaje: -1 });
 // NOTA: Para Telegram, el lookup primario debería ser tg_user_id si existe
 ChatsSchema.index({ linea: 1, cliente_phone: 1, platform: 1 }, { unique: true });
 
-// Índice único opcional para Telegram por userID
-ChatsSchema.index({ linea: 1, tg_user_id: 1 }, { unique: true, sparse: true });
+// Índice único parcial para Telegram por userID (ignora nulos para evitar colisiones en despachos)
+ChatsSchema.index(
+    { linea: 1, tg_user_id: 1 },
+    { 
+        unique: true, 
+        partialFilterExpression: { tg_user_id: { $type: "string" } } 
+    }
+);
+
 
 if (mongoose.models?.Chats) {
     delete mongoose.models.Chats;

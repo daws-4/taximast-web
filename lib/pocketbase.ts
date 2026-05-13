@@ -191,14 +191,14 @@ export interface Sticker {
 
 export async function getStickers(): Promise<Sticker[]> {
     if (!PB_URL) return [];
-    
+
     // We can fetch stickers without auth if public, but using admin token is safest
     const token = await getAdminToken();
     if (!token) return [];
 
     try {
-        const res = await fetch(`${PB_URL}/api/collections/${STICKERS_COLLECTION}/records?perPage=100`, { 
-            headers: { 'Authorization': token } 
+        const res = await fetch(`${PB_URL}/api/collections/${STICKERS_COLLECTION}/records?perPage=100`, {
+            headers: { 'Authorization': token }
         });
 
         if (!res.ok) return [];
