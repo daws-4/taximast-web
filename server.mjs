@@ -42,15 +42,28 @@ app.prepare().then(() => {
                 const isDriver = type === 'dispatch_driver';
 
                 const tgClient = global.telegramClients?.get(line_id);
+                const availableClients = Array.from(global.telegramClients?.keys() || []);
+                console.log(`[internal/telegram/send] line_id=${line_id} clientFound=${!!tgClient} connected=${tgClient?.connected} availableCount=${availableClients.length}`);
+                
                 if (!tgClient || !tgClient.connected) {
-                    const lastError = global.telegramErrors?.get(line_id) || "Cliente desconectado o no inicializado";
+                    if (tgClient && !tgClient.connected) {
+                        console.warn(`[internal/telegram/send] El cliente existe pero está DESCONECTADO para la línea ${line_id}. Intentando recarga...`);
+                        reloadTelegramClient(line_id);
+                    } else if (!tgClient) {
+                        console.warn(`[internal/telegram/send] Cliente no encontrado para ${line_id}. Intentando inicializar...`);
+                        reloadTelegramClient(line_id);
+                    }
+                    
+                    const lastError = global.telegramErrors?.get(line_id) || (tgClient ? "Cliente existe pero no está conectado" : "Cliente no encontrado en el mapa global");
+                    console.warn(`[internal/telegram/send] Error para ${line_id}: ${lastError}. Clientes disponibles: ${availableClients.join(', ')}`);
+                    
                     res.writeHead(500, { "Content-Type": "application/json" });
                     return res.end(JSON.stringify({ 
                         success: false, 
                         error: `Cliente Telegram inactivo para esta línea. Detalle: ${lastError}` 
                     }));
                 }
-
+                
                 const isPotentialPhone = (phone.length >= 10 && (phone.startsWith("58") || phone.startsWith("0") || phone.startsWith("+")));
                 let normalizedTarget;
 
@@ -200,7 +213,14 @@ app.prepare().then(() => {
             const linea = await Lineas.findById(lineId).select("+telegram_api_id +telegram_api_hash +telegram_session +gemini_api_key +gemini_prompt");
             
             if (!linea || !linea.activa || !linea.telegram_session || !linea.telegram_api_id) {
-                console.log(`[Telegram] Línea ${lineId} no elegible para Telegram (inactiva o falta config).`);
+                const reasons = [];
+                if (!linea) reasons.push("Línea no encontrada");
+                else {
+                    if (!linea.activa) reasons.push("inactiva");
+                    if (!linea.telegram_session) reasons.push("falta telegram_session");
+                    if (!linea.telegram_api_id) reasons.push("falta telegram_api_id");
+                }
+                console.log(`[Telegram] Línea ${lineId} no elegible para Telegram. Motivos: ${reasons.join(", ")}`);
                 return;
             }
 
@@ -210,11 +230,31 @@ app.prepare().then(() => {
                 session,
                 parseInt(linea.telegram_api_id),
                 linea.telegram_api_hash,
-                { connectionRetries: 3 }
+                { connectionRetries: 5 }
             );
 
             await client.connect();
-            console.log(`✅ [Telegram] Conectado para línea: ${linea.name}`);
+            console.log(`✅ [Telegram] Conectado exitosamente para línea: ${linea.name} (${lineId})`);
+
+            client.addEventHandler((event) => {
+                // Log simple para ver que el cliente sigue vivo al recibir eventos de sistema
+            });
+
+            // Manejar desconexión inesperada con re-intento automático
+            client.on("disconnected", () => {
+                console.warn(`⚠️ [Telegram] Cliente desconectado para línea: ${linea.name} (${lineId}). Reintentando conexión en 10 segundos...`);
+                global.telegramErrors.set(lineId, "Cliente desconectado (reintentando...)");
+                
+                // Evitar múltiples re-intentos simultáneos
+                if (client._reconnecting) return;
+                client._reconnecting = true;
+                
+                setTimeout(() => {
+                    if (global.telegramClients.get(lineId) === client) {
+                        reloadTelegramClient(lineId);
+                    }
+                }, 10000);
+            });
 
             global.telegramClients.set(lineId, client);
             setupTelegramInbound(client, linea, global.io);
@@ -272,19 +312,55 @@ app.prepare().then(() => {
                 telegram_api_id: { $exists: true, $ne: null },
             }).select("+telegram_api_id +telegram_api_hash +telegram_session +gemini_api_key +gemini_prompt");
 
+            console.log(`[Telegram] Se encontraron ${lineas.length} líneas configuradas para Telegram.`);
             for (const linea of lineas) {
+                console.log(`[Telegram] Iniciando cliente para línea: ${linea.name} (${linea._id})`);
                 await reloadTelegramClient(linea._id.toString());
             }
 
             if (lineas.length === 0) {
                 console.log("[Telegram] No hay líneas con credenciales configuradas.");
             }
+
+            // Log de diagnóstico final
+            const todasLasLineas = await Lineas.find({ activa: true });
+            console.log(`[Telegram Init] Resumen: ${lineas.length} inicializadas de ${todasLasLineas.length} activas en total.`);
+            if (lineas.length < todasLasLineas.length) {
+                const initIds = lineas.map(l => l._id.toString());
+                const missing = todasLasLineas.filter(l => !initIds.includes(l._id.toString()));
+                console.log(`[Telegram Init] Líneas activas SIN Telegram config: ${missing.map(l => `${l.name} (${l._id})`).join(", ")}`);
+            }
         } catch (error) {
             console.error("❌ [Telegram] Error inicializando clientes:", error);
         }
     }
 
-    setTimeout(() => initTelegramClients(), 3000);
+    // Reducir el delay de inicio a 1 segundo para ser más responsivo en reinicios
+    setTimeout(() => initTelegramClients(), 1000);
+
+    // Watchdog: Cada 30 minutos verifica si hay clientes caídos que deberían estar activos
+    setInterval(async () => {
+        console.log("[Telegram Watchdog] Verificando salud de las conexiones...");
+        try {
+            const Lineas = mongoose.model("Lineas");
+            const lineasConfiguradas = await Lineas.find({
+                activa: true,
+                telegram_session: { $exists: true, $ne: "" },
+            }).select("_id name");
+
+            for (const l of lineasConfiguradas) {
+                const id = l._id.toString();
+                const client = global.telegramClients.get(id);
+                
+                if (!client || !client.connected) {
+                    console.log(`[Telegram Watchdog] Re-inicializando línea caída: ${l.name} (${id})`);
+                    reloadTelegramClient(id);
+                }
+            }
+        } catch (err) {
+            console.error("[Telegram Watchdog] Error:", err.message);
+        }
+    }, 30 * 60 * 1000); // 30 minutos
 
     io.on("connection", (socket) => {
         // Cliente se une a la sala de su línea (recibe todos los eventos de esa línea)

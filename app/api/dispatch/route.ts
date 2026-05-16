@@ -304,6 +304,8 @@ async function sendTelegramDispatch({
     type: DispatchBody['type'];
 }) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    console.log(`[dispatch-telegram] Enviando a internal/telegram/send: line_id=${line_id} baseUrl=${baseUrl}`);
+    
     const tgResponse = await fetch(`${baseUrl}/internal/telegram/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
