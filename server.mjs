@@ -196,7 +196,15 @@ app.prepare().then(() => {
     global.telegramClients = new Map();
     global.telegramErrors = new Map();
 
+    const telegramReloading = new Set();
+
     async function reloadTelegramClient(lineId) {
+        // Evitar recargas simultáneas de la misma línea (watchdog + send + panel)
+        if (telegramReloading.has(lineId)) {
+            console.log(`[Telegram] Recarga ya en curso para línea: ${lineId}, se omite.`);
+            return;
+        }
+        telegramReloading.add(lineId);
         try {
             console.log(`[Telegram] Recargando cliente para línea: ${lineId}`);
             
@@ -230,32 +238,15 @@ app.prepare().then(() => {
                 session,
                 parseInt(linea.telegram_api_id),
                 linea.telegram_api_hash,
-                { connectionRetries: 5 }
+                { connectionRetries: Infinity, autoReconnect: true, retryDelay: 2000 }
             );
+            // Solo errores: deja ver el origen real de los TIMEOUT en lugar de silenciarlos
+            client.setLogLevel("error");
 
             await client.connect();
             console.log(`✅ [Telegram] Conectado exitosamente para línea: ${linea.name} (${lineId})`);
 
-            client.addEventHandler((event) => {
-                // Log simple para ver que el cliente sigue vivo al recibir eventos de sistema
-            });
-
-            // Manejar desconexión inesperada con re-intento automático
-            client.on("disconnected", () => {
-                console.warn(`⚠️ [Telegram] Cliente desconectado para línea: ${linea.name} (${lineId}). Reintentando conexión en 10 segundos...`);
-                global.telegramErrors.set(lineId, "Cliente desconectado (reintentando...)");
-                
-                // Evitar múltiples re-intentos simultáneos
-                if (client._reconnecting) return;
-                client._reconnecting = true;
-                
-                setTimeout(() => {
-                    if (global.telegramClients.get(lineId) === client) {
-                        reloadTelegramClient(lineId);
-                    }
-                }, 10000);
-            });
-
+            // La detección de clientes caídos la hace el watchdog con un ping real
             global.telegramClients.set(lineId, client);
             setupTelegramInbound(client, linea, global.io);
         } catch (err) {
@@ -265,6 +256,8 @@ app.prepare().then(() => {
             }
             console.error(`❌ [Telegram] Error conectando línea ${lineId}:`, detail);
             global.telegramErrors.set(lineId, detail);
+        } finally {
+            telegramReloading.delete(lineId);
         }
     }
 
@@ -338,9 +331,25 @@ app.prepare().then(() => {
     // Reducir el delay de inicio a 1 segundo para ser más responsivo en reinicios
     setTimeout(() => initTelegramClients(), 1000);
 
-    // Watchdog: Cada 30 minutos verifica si hay clientes caídos que deberían estar activos
+    // Ping real a Telegram: `client.connected` sigue en true aunque el update loop esté dando TIMEOUT
+    async function pingTelegramClient(client, ms = 15000) {
+        let timer;
+        try {
+            await Promise.race([
+                client.invoke(new Api.updates.GetState()),
+                new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("ping timeout")), ms); }),
+            ]);
+            return true;
+        } catch (err) {
+            console.warn(`[Telegram Watchdog] Ping falló: ${err.message}`);
+            return false;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    // Watchdog: Cada 3 minutos verifica con un ping real que cada cliente responda
     setInterval(async () => {
-        console.log("[Telegram Watchdog] Verificando salud de las conexiones...");
         try {
             const Lineas = mongoose.model("Lineas");
             const lineasConfiguradas = await Lineas.find({
@@ -352,15 +361,17 @@ app.prepare().then(() => {
                 const id = l._id.toString();
                 const client = global.telegramClients.get(id);
                 
-                if (!client || !client.connected) {
+                if (telegramReloading.has(id)) continue;
+
+                if (!client || !client.connected || !(await pingTelegramClient(client))) {
                     console.log(`[Telegram Watchdog] Re-inicializando línea caída: ${l.name} (${id})`);
-                    reloadTelegramClient(id);
+                    await reloadTelegramClient(id);
                 }
             }
         } catch (err) {
             console.error("[Telegram Watchdog] Error:", err.message);
         }
-    }, 30 * 60 * 1000); // 30 minutos
+    }, 3 * 60 * 1000); // 3 minutos
 
     io.on("connection", (socket) => {
         // Cliente se une a la sala de su línea (recibe todos los eventos de esa línea)
@@ -433,6 +444,21 @@ function setupTelegramInbound(tgClient, lineaData, io) {
             const senderId = message.peerId?.userId?.toString();
             const text = message.text;
             if (!text || !senderId) return;
+
+            // Evitar procesar el mismo mensaje múltiple veces (duplicados por reintentos o eventos duplicados de GramJS)
+            const msgKey = `${lineaData._id}:${senderId}:${message.id}`;
+            if (!global.processedTelegramMessages) {
+                global.processedTelegramMessages = new Set();
+            }
+            if (global.processedTelegramMessages.has(msgKey)) {
+                console.log(`[IN - TG - ${lineaData.name}] Mensaje duplicado omitido: ${msgKey}`);
+                return;
+            }
+            global.processedTelegramMessages.add(msgKey);
+            // Mantener limpio el caché de duplicados eliminando la clave después de 30 segundos
+            setTimeout(() => {
+                global.processedTelegramMessages?.delete(msgKey);
+            }, 30000);
 
             const sender = await message.getSender();
             // Normalizar: quitar '+' y no-dígitos → E.164 puro (sin prefijo '+')
@@ -533,7 +559,10 @@ function setupTelegramInbound(tgClient, lineaData, io) {
                 }
                 chat.mensajes.push(nuevoMensaje);
                 chat.ultimoMensaje = now;
-                if (senderName && !chat.cliente_nombre) chat.cliente_nombre = senderName;
+                if (senderName && chat.cliente_nombre !== senderName) {
+                    console.log(`[TG-UPDATE] Actualizando nombre de cliente: "${chat.cliente_nombre}" → "${senderName}"`);
+                    chat.cliente_nombre = senderName;
+                }
                 await chat.save();
             }
 
